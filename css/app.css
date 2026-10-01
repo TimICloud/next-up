@@ -665,6 +665,17 @@ p { margin: 0; }
 .finder-hint .link { margin: 0; }
 @media (min-width: 900px) { .finder-bar { padding-left: max(16px, calc(50vw - 360px)); padding-right: max(16px, calc(50vw - 360px)); } }
 
+.settings { max-width: 560px; margin: 0 auto; }
+.settings .page-head { justify-content: flex-start; gap: 12px; align-items: center; }
+.settings-form { display: grid; gap: 4px; }
+.settings-form .field { margin-top: 10px; }
+.settings-form .field.first { margin-top: 0; }
+.settings-form .btn { justify-self: start; margin-top: 14px; }
+.settings-current { color: var(--muted); font-size: 14px; margin-bottom: 4px; }
+.settings-current b { color: var(--text); }
+.settings .card .link.small { display: inline-block; margin-top: 14px; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
 /* ——— Abonnements ——— */
 .subs-banner, .soon-card {
   display: flex; align-items: center; gap: 14px; margin-bottom: 14px; padding: 14px 16px;

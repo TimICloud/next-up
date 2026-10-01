@@ -10,7 +10,15 @@ let session = null;
 let ready = false;
 let recovery = false;
 let linkError = null;
+let linkMessage = null;
 const listeners = new Set();
+
+// Message laissé par un lien de confirmation (changement d'adresse e-mail).
+export const takeLinkMessage = () => {
+  const m = linkMessage;
+  linkMessage = null;
+  return m;
+};
 
 // Arrivée depuis le lien « mot de passe oublié » : l'utilisateur doit choisir un nouveau mot de passe.
 export const isRecovery = () => recovery;
@@ -25,6 +33,13 @@ export async function init() {
   if (!enabled) return;
   const hash = location.hash;
   if (/type=recovery/.test(hash)) recovery = true;
+  // Lien de confirmation d'un changement d'adresse e-mail.
+  if (/type=email_change/.test(hash)) linkMessage = 'email-changed';
+  const message = /[#&]message=([^&]+)/.exec(hash);
+  if (message) {
+    linkMessage = /other email/i.test(decodeURIComponent(message[1].replace(/\+/g, ' '))) ? 'email-half' : 'email-changed';
+    history.replaceState(null, '', location.pathname + location.search);
+  }
   const error = /error_code=([^&]+)/.exec(hash);
   if (error) {
     linkError = decodeURIComponent(error[1]);
@@ -51,6 +66,8 @@ export const displayName = () => user()?.user_metadata?.name || user()?.email?.s
 
 const MESSAGES = [
   [/invalid login credentials/i, 'E-mail ou mot de passe incorrect.'],
+  [/already been registered|email.*(exists|already)/i, 'Cette adresse est déjà utilisée par un autre compte.'],
+  [/same.*email|new email.*current/i, 'C’est déjà ton adresse actuelle.'],
   [/already registered|already exists/i, 'Un compte existe déjà avec cet e-mail.'],
   [/password should be at least|weak password/i, 'Le mot de passe doit faire au moins 6 caractères.'],
   [/email not confirmed/i, 'Confirme d’abord ton e-mail grâce au lien reçu.'],
@@ -80,6 +97,20 @@ export async function signIn(email, password) {
 export async function resetPassword(email) {
   const { error } = await client.auth.resetPasswordForEmail(email, { redirectTo: location.origin + location.pathname });
   if (error) throw frenchError(error);
+}
+
+// Vérifie le mot de passe actuel avant un changement sensible (et rafraîchit la session).
+export async function verifyPassword(password) {
+  const { error } = await client.auth.signInWithPassword({ email: user().email, password });
+  if (error) throw new Error(/invalid login/i.test(error.message) ? 'Mot de passe actuel incorrect.' : frenchError(error).message);
+}
+
+// Renvoie 'changed' si l'adresse est déjà modifiée, sinon 'confirm' (e-mail(s) de confirmation envoyé(s)).
+export async function updateEmail(email) {
+  const { data, error } = await client.auth.updateUser({ email }, { emailRedirectTo: location.origin + location.pathname });
+  if (error) throw frenchError(error);
+  if (session) session = { ...session, user: data.user };
+  return data.user.email === email ? 'changed' : 'confirm';
 }
 
 export async function updatePassword(password) {

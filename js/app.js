@@ -773,6 +773,55 @@ function viewProfile() {
     <p class="credit muted">Next Up utilise l’API TMDB mais n’est ni approuvé ni certifié par TMDB.</p>`;
 }
 
+// ——— Mon compte : prénom, adresse e-mail, mot de passe ———
+function viewSettings() {
+  const u = Auth.user();
+  if (!u) {
+    return `<div class="empty"><h2>Connecte-toi d’abord</h2><p>Cette page permet de modifier ton compte Next Up.</p><a class="btn primary" href="#/account/login">Se connecter</a></div>`;
+  }
+  const notice = ui.settingsNotice;
+  ui.settingsNotice = null;
+  const pending = u.new_email;
+  return `<div class="settings">
+    <header class="page-head compact"><button class="icon-btn" data-action="back" aria-label="Retour">${icon('back')}</button><h1>Mon compte</h1></header>
+    ${notice ? `<p class="notice ${notice.warn ? 'warn' : ''}">${esc(notice.text)}</p>` : ''}
+
+    <section class="card">
+      <header class="card-head"><h3 class="label">Prénom</h3></header>
+      <form class="settings-form" data-form="setName" novalidate>
+        <label class="field first"><span class="sr-only">Prénom</span><input name="name" value="${esc(Auth.displayName())}" autocomplete="given-name" maxlength="40"></label>
+        <p class="form-error" hidden></p>
+        <button class="btn primary" type="submit">Enregistrer</button>
+      </form>
+    </section>
+
+    <section class="card">
+      <header class="card-head"><h3 class="label">Adresse e-mail</h3></header>
+      <p class="settings-current">Actuelle : <b>${esc(u.email)}</b></p>
+      ${pending ? `<p class="hint warn">En attente de confirmation : <b>${esc(pending)}</b>. Clique sur le lien reçu par e-mail pour terminer.</p>` : ''}
+      <form class="settings-form" data-form="setEmail" novalidate>
+        <label class="field"><span>Nouvelle adresse</span><input name="email" type="email" inputmode="email" autocomplete="email"></label>
+        <label class="field"><span>Mot de passe actuel</span><input name="current" type="password" autocomplete="current-password"></label>
+        <p class="form-error" hidden></p>
+        <button class="btn primary" type="submit">Changer l’adresse</button>
+      </form>
+      <p class="hint">Un lien de confirmation sera envoyé pour valider le changement.</p>
+    </section>
+
+    <section class="card">
+      <header class="card-head"><h3 class="label">Mot de passe</h3></header>
+      <form class="settings-form" data-form="setPassword" novalidate>
+        <label class="field first"><span>Mot de passe actuel</span><input name="current" type="password" autocomplete="current-password"></label>
+        <label class="field"><span>Nouveau mot de passe</span><input name="password" type="password" autocomplete="new-password"><small>6 caractères minimum</small></label>
+        <label class="field"><span>Confirme le nouveau mot de passe</span><input name="confirm" type="password" autocomplete="new-password"></label>
+        <p class="form-error" hidden></p>
+        <button class="btn primary" type="submit">Changer le mot de passe</button>
+      </form>
+      <button class="link small left" data-action="forgotFromSettings">Mot de passe actuel oublié ?</button>
+    </section>
+  </div>`;
+}
+
 function subsCard() {
   const subs = subscriptions();
   return `<section class="card" id="abonnements">
@@ -823,7 +872,7 @@ function accountCard() {
         <button class="link small" data-action="editName">Modifier</button></span>
       <span class="muted">${esc(u.email)}</span>
       <span class="hint ok">${icon('check')} Catalogue complet · bibliothèque synchronisée</span>
-      <a class="link small left" href="#/account/new-password">Changer mon mot de passe</a></div>
+      <a class="link small left" href="#/settings">Gérer mon compte : e-mail, mot de passe</a></div>
     <button class="btn small ghost" data-action="signOut">Déconnexion</button>
   </section>`;
 }
@@ -1241,6 +1290,14 @@ const actions = {
     S.updateSettings({ subscriptions: next });
     if (Auth.user()) Auth.updateMeta({ subscriptions: next }).catch(() => toast('Abonnements enregistrés sur cet appareil seulement'));
   },
+  async forgotFromSettings() {
+    const email = Auth.user()?.email;
+    if (!email) return;
+    try {
+      await Auth.resetPassword(email);
+      toast(`Lien envoyé à <b>${esc(email)}</b> pour choisir un nouveau mot de passe`);
+    } catch (e) { toast(esc(e.message)); }
+  },
   manual() { openManualSheet(null); },
   openSearch() { openFinder(); },
   closeFinder() { closeFinder(); },
@@ -1389,6 +1446,65 @@ document.addEventListener('change', (ev) => {
       try { S.importData(txt); toast('Bibliothèque importée'); } catch { toast('Fichier invalide'); }
     });
   }
+});
+
+// Formulaires de « Mon compte »
+document.addEventListener('submit', async (ev) => {
+  const form = ev.target;
+  const kind = form.dataset.form;
+  if (!['setName', 'setEmail', 'setPassword'].includes(kind)) return;
+  ev.preventDefault();
+  const data = new FormData(form);
+  const error = form.querySelector('.form-error');
+  const button = form.querySelector('[type=submit]');
+  const fail = (message) => { error.textContent = message; error.hidden = false; };
+  error.hidden = true;
+  const current = String(data.get('current') || '');
+
+  if (kind === 'setName') {
+    const name = String(data.get('name') || '').trim();
+    if (!name) return fail('Indique ton prénom.');
+    button.disabled = true;
+    try {
+      await Auth.updateName(name);
+      render();
+      toast(`Prénom mis à jour · <b>${esc(name)}</b>`);
+    } catch (e) { fail(e.message); button.disabled = false; }
+    return;
+  }
+
+  if (kind === 'setEmail') {
+    const email = String(data.get('email') || '').trim().toLowerCase();
+    if (!/^\S+@\S+\.\S+$/.test(email)) return fail('Cette adresse e-mail n’est pas valide.');
+    if (email === Auth.user().email) return fail('C’est déjà ton adresse actuelle.');
+    if (!current) return fail('Entre ton mot de passe actuel.');
+    button.disabled = true;
+    try {
+      await Auth.verifyPassword(current);
+      const result = await Auth.updateEmail(email);
+      ui.settingsNotice = result === 'changed'
+        ? { text: `Adresse e-mail changée : ${email}.` }
+        : { text: `Presque fini : clique sur le lien envoyé à ${email} (et, si demandé, sur celui envoyé à ton ancienne adresse) pour valider le changement.` };
+      render();
+      window.scrollTo(0, 0);
+    } catch (e) { fail(e.message); button.disabled = false; }
+    return;
+  }
+
+  // setPassword
+  const password = String(data.get('password') || '');
+  if (!current) return fail('Entre ton mot de passe actuel.');
+  if (password.length < 6) return fail('Le nouveau mot de passe doit faire au moins 6 caractères.');
+  if (password !== data.get('confirm')) return fail('Les deux nouveaux mots de passe ne sont pas identiques.');
+  if (password === current) return fail('Choisis un mot de passe différent de l’actuel.');
+  button.disabled = true;
+  try {
+    await Auth.verifyPassword(current);
+    await Auth.updatePassword(password);
+    form.reset();
+    button.disabled = false;
+    toast('Mot de passe changé');
+  } catch (e) { fail(e.message); button.disabled = false; }
 });
 
 document.addEventListener('submit', (ev) => {
@@ -1632,10 +1748,11 @@ function render() {
   else if (r.name === 'title') view.innerHTML = viewTitle(r.arg);
   else if (r.name === 'account') view.innerHTML = viewAccount(r.arg);
   else if (r.name === 'upcoming') view.innerHTML = viewUpcoming();
+  else if (r.name === 'settings') view.innerHTML = viewSettings();
   else view.innerHTML = viewHome();
   view.dataset.route = r.name;
 
-  const TITLES = { home: '', library: 'Bibliothèque', add: 'Ajouter', profile: 'Profil', account: 'Compte', upcoming: 'À venir' };
+  const TITLES = { home: '', library: 'Bibliothèque', add: 'Ajouter', profile: 'Profil', account: 'Compte', upcoming: 'À venir', settings: 'Mon compte' };
   const pageTitle = r.name === 'title' ? S.get(r.arg)?.title.name : TITLES[r.name];
   document.title = pageTitle ? `${pageTitle} · Next Up` : 'Next Up';
 
@@ -1644,7 +1761,7 @@ function render() {
   avatar.classList.toggle('on', Boolean(user));
   avatar.innerHTML = user ? esc(Auth.displayName().slice(0, 1).toUpperCase()) : icon('user');
 
-  const navRoute = r.name === 'account' ? 'profile' : r.name;
+  const navRoute = r.name === 'account' || r.name === 'settings' ? 'profile' : r.name;
   document.querySelectorAll('.nav a').forEach((a) => a.classList.toggle('active', a.dataset.route === navRoute));
 }
 
@@ -1713,6 +1830,13 @@ async function boot() {
     // Hors ligne : on continue avec la bibliothèque enregistrée sur l'appareil.
   }
   const linkError = Auth.takeLinkError();
+  const linkMessage = Auth.takeLinkMessage();
+  if (linkMessage && Auth.user()) {
+    ui.settingsNotice = linkMessage === 'email-half'
+      ? { text: 'Lien accepté. Clique aussi sur le lien envoyé à ton autre adresse pour terminer le changement.', warn: true }
+      : { text: `Adresse e-mail confirmée : ${Auth.user().email}.` };
+    location.hash = '#/settings';
+  }
   if (Auth.isRecovery() && Auth.user()) {
     location.hash = '#/account/new-password';
   } else if (linkError) {
