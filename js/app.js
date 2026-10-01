@@ -254,7 +254,7 @@ function finderLibrary(q) {
   if (!q) return [];
   return S.entries()
     .map((e) => ({ e, s: Math.max(similarity(q, norm(e.title.name)), similarity(q, norm(e.title.original || ''))) }))
-    .filter((x) => x.s >= 0.5)
+    .filter((x) => x.s >= 0.62)
     .sort((a, b) => b.s - a.s)
     .slice(0, 8)
     .map((x) => x.e);

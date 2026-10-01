@@ -150,7 +150,7 @@ export async function search(query, settings, signal) {
   if (!live()) {
     return DEMO
       .map((t) => ({ t, s: Math.max(similarity(q, norm(t.name)), similarity(q, norm(t.original))) }))
-      .filter((x) => x.s >= 0.5)
+      .filter((x) => x.s >= 0.62)
       .sort((a, b) => b.s - a.s)
       .map((x) => x.t);
   }
