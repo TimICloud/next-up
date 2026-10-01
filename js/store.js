@@ -266,6 +266,10 @@ export function platformAlert(entry, subs = []) {
   };
 }
 
+// Sur la plateforme choisie, le titre n'est pas inclus dans l'abonnement : seulement à l'achat ou en location.
+export const purchaseOnly = (entry) =>
+  Boolean(entry.paidProviders?.includes(entry.platform) && !entry.providers?.includes(entry.platform));
+
 // Le titre peut-il être regardé avec les abonnements de l'utilisateur ?
 export function availableForMe(entry, subs) {
   if (!subs.length) return true;

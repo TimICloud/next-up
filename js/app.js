@@ -219,7 +219,7 @@ function resumeCard(e, p) {
     <div class="rcard-bg">${backdrop(t)}</div>
     ${poster(t, 'rcard-poster')}
     <div class="rcard-body">
-      <div class="rcard-top">${chip(e.platform)}${t.type === 'movie' ? '<span class="tag">Film</span>' : ''}${S.availableForMe(e, subscriptions()) ? '' : '<span class="tag warn">Hors abonnements</span>'}</div>
+      <div class="rcard-top">${chip(e.platform)}${t.type === 'movie' ? '<span class="tag">Film</span>' : ''}${S.purchaseOnly(e) ? '<span class="tag warn">€ Achat</span>' : S.availableForMe(e, subscriptions()) ? '' : '<span class="tag warn">Hors abonnements</span>'}</div>
       <h3>${esc(t.name)}</h3>
       <p class="next">${nextLine(e, p)}</p>
       ${bar(p.pct)}
@@ -304,6 +304,7 @@ function tile(e) {
   return `<div class="tile" data-go="#/title/${encodeURIComponent(e.id)}">
     <div class="tile-poster">${poster(e.title)}
       ${e.status === 'completed' ? `<span class="tile-done">${icon('check')}</span>` : ''}
+      ${S.purchaseOnly(e) && e.status !== 'completed' ? '<span class="tile-paid">€ Achat</span>' : ''}
       ${canPlus ? plusButton(e, p, 'sm') : ''}
     </div>
     ${bar(p.pct)}
@@ -997,7 +998,11 @@ const actions = {
   sheetSave() {
     const sh = ui.sheet;
     S.add(sh.title, { platform: sh.platform, status: sh.status, next: { s: sh.s, e: sh.e }, minutes: sh.minutes });
-    if (sh.providers && sh.title.source === 'tmdb') S.setProviders(sh.title.id, sh.providers, sh.paid || []);
+    if (sh.providers && sh.title.source === 'tmdb') {
+      S.setProviders(sh.title.id, sh.providers, sh.paid || []);
+      // Disponibilité connue au moment de l'ajout : on n'alertera que si elle change ensuite.
+      S.ackAlert(sh.title.id);
+    }
     closeSheet();
     toast(`<b>${esc(sh.title.name)}</b> ajouté`);
     location.hash = `#/title/${encodeURIComponent(sh.title.id)}`;
