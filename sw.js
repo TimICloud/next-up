@@ -1,6 +1,6 @@
 // Mode hors ligne : réseau d'abord, cache en secours pour les fichiers de l'app.
 // Les appels à l'API TMDB ne sont jamais mis en cache ici (l'app garde ses propres données).
-const CACHE = 'nextup-v4';
+const CACHE = 'nextup-v5';
 const SHELL = ['./', 'index.html', 'css/app.css', 'js/app.js', 'js/store.js', 'js/catalog.js', 'js/platforms.js', 'js/icons.js', 'js/auth.js', 'js/config.js', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png'];
 
 self.addEventListener('install', (e) => {

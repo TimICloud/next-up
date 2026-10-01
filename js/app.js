@@ -979,6 +979,15 @@ function render() {
   else view.innerHTML = viewHome();
   view.dataset.route = r.name;
 
+  const TITLES = { home: '', library: 'Bibliothèque', add: 'Ajouter', profile: 'Profil', account: 'Compte' };
+  const pageTitle = r.name === 'title' ? S.get(r.arg)?.title.name : TITLES[r.name];
+  document.title = pageTitle ? `${pageTitle} · Next Up` : 'Next Up';
+
+  const avatar = $('#top-avatar');
+  const user = Auth.user();
+  avatar.classList.toggle('on', Boolean(user));
+  avatar.innerHTML = user ? esc(Auth.displayName().slice(0, 1).toUpperCase()) : icon('user');
+
   const navRoute = r.name === 'account' ? 'profile' : r.name;
   document.querySelectorAll('.nav a').forEach((a) => a.classList.toggle('active', a.dataset.route === navRoute));
 }
@@ -1020,6 +1029,9 @@ Auth.onChange(async (user) => {
   toast(`Bienvenue ${esc(Auth.displayName())} !`);
   refreshLibrary(true);
 });
+
+// Bordure de la barre du haut dès qu'on fait défiler.
+window.addEventListener('scroll', () => $('.topbar').classList.toggle('scrolled', window.scrollY > 4), { passive: true });
 
 // En revenant sur l'app, on récupère les changements faits sur les autres appareils.
 document.addEventListener('visibilitychange', () => {
