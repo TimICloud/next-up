@@ -129,12 +129,24 @@ async function smartSearch(query: string, region: string) {
   }
 
   // 2. Personnes et 3. thèmes (en parallèle)
-  const persons = ((people as { results?: Item[] }).results ?? [])
-    .map((p) => ({ p, sim: similarity(q, norm(String(p.name ?? ''))) }))
-    .filter((x) => x.sim >= 0.75)
-    .slice(0, 2);
   const themes = ((keywords as { results?: Item[] }).results ?? [])
     .filter((k) => similarity(q, norm(String(k.name ?? ''))) >= 0.85)
+    .slice(0, 2);
+  const exactTheme = themes.some((k) => norm(String(k.name ?? '')) === q);
+  // Une personne n'est proposée que si son nom est (presque) entièrement tapé (« Bryan Cranston »),
+  // ou si on tape juste le nom de famille d'une personne très connue (« Nolan »), sauf si c'est aussi un thème (« zombie »).
+  const persons = ((people as { results?: Item[] }).results ?? [])
+    .map((p, rank) => {
+      const name = norm(String(p.name ?? ''));
+      const full = ratio(q, name);
+      // Un mot qui est aussi un thème (« mafia ») ne désigne pas une personne au nom d'un seul mot.
+      if (exactTheme && name.split(' ').length < 2) return { p, sim: 0 };
+      const surname = !exactTheme && rank === 0 && Number(p.popularity ?? 0) >= 2
+        && ['Acting', 'Directing', 'Writing'].includes(String(p.known_for_department))
+        && q.split(' ').every((w) => name.split(' ').includes(w));
+      return { p, sim: Math.max(full, surname ? 0.8 : 0) };
+    })
+    .filter((x) => x.sim >= 0.75)
     .slice(0, 2);
   const [credits, discovered] = await Promise.all([
     Promise.all(persons.map(({ p }) => getJson(`/person/${p.id}/combined_credits`, {}))),
@@ -147,11 +159,15 @@ async function smartSearch(query: string, region: string) {
   persons.forEach(({ p, sim }, i) => {
     const c = credits[i] as { cast?: Item[]; crew?: Item[] };
     const director = p.known_for_department === 'Directing';
+    // Séries : seulement les vrais rôles (au moins 4 épisodes), pas les apparitions ni les voix d'un épisode.
+    const realRole = (r: Item) => r.media_type !== 'tv' || r.job === 'Creator' || Number(r.episode_count ?? 0) >= 4;
+    const weight = (r: Item) => (r.media_type === 'tv' ? Math.min(1, Number(r.episode_count ?? 0) / 30) : 0.6);
     const roles = [
       ...(c.cast ?? []).filter((r) => !/\b(self|himself|herself|lui-même|elle-même)\b/i.test(String(r.character ?? ''))),
       ...(c.crew ?? []).filter((r) => ['Director', 'Creator'].includes(String(r.job))),
-    ].sort((a, b) => Number(b.popularity ?? 0) - Number(a.popularity ?? 0)).slice(0, 15);
-    for (const r of roles) add(r, 0.45 + sim * 0.25 + popScore(r) * 0.2 + voteScore(r) * 0.1, `${director ? 'de' : 'avec'} ${p.name}`);
+    ].filter(realRole)
+      .sort((a, b) => (popScore(b) + weight(b)) - (popScore(a) + weight(a))).slice(0, 15);
+    for (const r of roles) add(r, 0.45 + sim * 0.25 + popScore(r) * 0.15 + voteScore(r) * 0.05 + weight(r) * 0.1, `${director ? 'de' : 'avec'} ${p.name}`);
   });
 
   for (const { k, type, d } of discovered) {
