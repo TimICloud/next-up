@@ -154,7 +154,7 @@ function viewHome() {
 
   const withP = list.map((e) => ({ e, p: S.progress(e) }));
   const subs = subscriptions();
-  const alerts = list.map((e) => ({ e, to: S.platformAlert(e, subs) })).filter((a) => a.to);
+  const alerts = list.map((e) => ({ e, alert: S.platformAlert(e, subs) })).filter((a) => a.alert);
   const soon = upcoming().items.filter((x) => x.days <= 7);
   const resume = withP
     .filter(({ e, p }) => e.status === 'watching' && (p.movie ? !p.done : p.next && p.nextAired))
@@ -169,7 +169,7 @@ function viewHome() {
     </header>
 
     ${Auth.enabled && !Auth.user() ? accountBanner() : ''}
-    ${alerts.map(({ e, to }) => alertCard(e, to)).join('')}
+    ${alerts.map(({ e, alert }) => alertCard(e, alert)).join('')}
     ${!subs.length ? `<a class="subs-banner" href="#/profile/abonnements">
       <span class="subs-icons">${['netflix', 'prime', 'disney'].map((id) => `<i style="--pc:${platform(id).color}"></i>`).join('')}</span>
       <span><b>Indique tes abonnements</b><small>Pour savoir ce que tu peux regarder et être prévenu au bon moment.</small></span>
@@ -232,17 +232,24 @@ function miniPoster(e) {
   </a>`;
 }
 
-function alertCard(e, to) {
+function alertCard(e, { to, paidOnly }) {
   const from = platform(e.platform).name;
   const target = to[0];
+  const subs = subscriptions();
+  const headline = paidOnly
+    ? `<b>${esc(e.title.name)}</b> n’est plus inclus dans l’abonnement ${esc(from)} : seulement à l’achat ou en location.`
+    : `<b>${esc(e.title.name)}</b> n’est plus sur ${esc(from)}.`;
+  const where = to.length
+    ? `Inclus dans l’abonnement ${to.map((pid) => esc(platform(pid).name)).join(', ')}${subs.includes(target) ? ' (un de tes abonnements)' : subs.length ? ' (pas dans tes abonnements)' : ''}.`
+    : 'Il n’est plus inclus dans aucun abonnement pour l’instant.';
   return `<div class="alert">
-    <div class="alert-icon">${icon('swap')}</div>
+    <div class="alert-icon">${icon(paidOnly ? 'alert' : 'swap')}</div>
     <div class="alert-body">
-      <p><b>${esc(e.title.name)}</b> n’est plus sur ${esc(from)}.</p>
-      <p class="muted">Disponible sur ${to.map((pid) => esc(platform(pid).name)).join(', ')}${subscriptions().includes(target) ? ', inclus dans tes abonnements' : subscriptions().length ? ' (pas dans tes abonnements)' : ''}. Ta progression est conservée.</p>
+      <p>${headline}</p>
+      <p class="muted">${where} Ta progression est conservée.</p>
       <div class="alert-actions">
-        <button class="btn small primary" data-action="switchPlatform" data-id="${esc(e.id)}" data-p="${target}">Passer sur ${esc(platform(target).name)}</button>
-        <button class="btn small ghost" data-action="ackAlert" data-id="${esc(e.id)}">Ignorer</button>
+        ${target ? `<button class="btn small primary" data-action="switchPlatform" data-id="${esc(e.id)}" data-p="${target}">Passer sur ${esc(platform(target).name)}</button>` : ''}
+        <button class="btn small ghost" data-action="ackAlert" data-id="${esc(e.id)}">${target ? 'Ignorer' : 'OK, compris'}</button>
       </div>
     </div>
   </div>`;
@@ -388,7 +395,7 @@ function viewTitle(id) {
   if (!e) return `<div class="empty"><h2>Titre introuvable</h2><a class="btn" href="#/">Retour à l’accueil</a></div>`;
   const t = e.title;
   const p = S.progress(e);
-  const alertTo = S.platformAlert(e);
+  const alertTo = S.platformAlert(e, subscriptions());
   const facts = [t.year, t.type === 'tv' ? plural((t.seasons || []).length, 'saison', 'saisons') : t.runtime ? `${t.runtime} min` : null, (t.genres || []).slice(0, 2).join(', ')].filter(Boolean);
 
   return `<div class="detail">
@@ -482,9 +489,14 @@ function platformCard(e) {
       `<li><i style="--pc:${platform(h.platform).color}"></i><b>${esc(platform(h.platform).name)}</b><span>depuis le ${date(h.at)}</span></li>`).join('')}</ol>` : ''}
     ${e.title.source === 'custom' ? '' : `<div class="avail"><span class="label">Disponible en ${esc(S.settings().region)}${e.title.source === 'demo' ? ' (démo)' : ''}</span>
       ${avail == null ? `<p class="muted">${C.live() ? 'Recherche…' : 'Disponible avec un compte Next Up.'}</p>`
-        : avail.length ? `<div class="chips">${avail.map((id) => subscriptions().includes(id) ? chip(id).replace('</span>', ` ${icon('check', 'mine')}</span>`) : chip(id)).join('')}</div>
-          ${subscriptions().length ? `<p class="hint">${avail.some((id) => subscriptions().includes(id)) ? `${icon('check')} Inclus dans tes abonnements` : 'Pas disponible sur tes abonnements.'}</p>` : ''}`
-          : '<p class="muted">Aucune plateforme d’abonnement trouvée.</p>'}
+        : `${avail.length ? `<p class="avail-kind">Inclus dans l’abonnement</p>
+          <div class="chips">${avail.map((id) => subscriptions().includes(id) ? chip(id).replace('</span>', ` ${icon('check', 'mine')}</span>`) : chip(id)).join('')}</div>`
+          : '<p class="muted">Inclus dans aucun abonnement pour l’instant.</p>'}
+          ${e.paidProviders?.length ? `<p class="avail-kind">À l’achat ou en location</p>
+          <div class="chips">${e.paidProviders.map((id) => chip(id).replace('</span>', ' <em class="paid">€</em></span>')).join('')}</div>` : ''}
+          ${subscriptions().length ? `<p class="hint">${avail.some((id) => subscriptions().includes(id)) ? `${icon('check')} Inclus dans tes abonnements`
+            : e.paidProviders?.some((id) => subscriptions().includes(id)) ? 'Sur tes plateformes, mais seulement à l’achat ou en location (en plus de l’abonnement).'
+            : 'Pas inclus dans tes abonnements.'}</p>` : ''}`}
     </div>`}
   </section>`;
 }
@@ -556,6 +568,11 @@ function viewProfile() {
         <button class="btn ghost danger" data-action="clearAll">Tout effacer</button>
       </div>
     </section>
+    ${Auth.user() ? `<section class="card danger-zone">
+      <div class="card-title">${icon('trash')}<h3>Supprimer mon compte</h3></div>
+      <p class="muted">Ton compte, ta bibliothèque et ta progression seront effacés définitivement, sur tous tes appareils.</p>
+      <button class="btn ghost danger" data-action="askDelete">Supprimer mon compte</button>
+    </section>` : ''}
     <p class="credit muted">Next Up utilise l’API TMDB mais n’est ni approuvé ni certifié par TMDB.</p>`;
 }
 
@@ -608,7 +625,8 @@ function accountCard() {
       <span class="name-row"><b>${esc(name)}</b>
         <button class="link small" data-action="editName">Modifier</button></span>
       <span class="muted">${esc(u.email)}</span>
-      <span class="hint ok">${icon('check')} Catalogue complet · bibliothèque synchronisée</span></div>
+      <span class="hint ok">${icon('check')} Catalogue complet · bibliothèque synchronisée</span>
+      <a class="link small left" href="#/account/new-password">Changer mon mot de passe</a></div>
     <button class="btn small ghost" data-action="signOut">Déconnexion</button>
   </section>`;
 }
@@ -619,6 +637,7 @@ function viewAccount(mode) {
   if (!Auth.enabled) {
     return `<div class="empty"><h2>Comptes pas encore activés</h2><p>Le serveur Next Up n’est pas encore configuré. L’app fonctionne en mode démo.</p><a class="btn" href="#/">Retour à l’accueil</a></div>`;
   }
+  if (mode === 'new-password') return viewNewPassword();
   if (Auth.user()) {
     return `<div class="empty"><h2>Tu es connecté</h2><p>${esc(Auth.user().email)}</p><a class="btn primary" href="#/">Aller à l’accueil</a></div>`;
   }
@@ -631,7 +650,7 @@ function viewAccount(mode) {
   return `<div class="auth">
     <button class="icon-btn" data-action="back" aria-label="Retour">${icon('back')}</button>
     <div class="auth-head">${logo('big')}<h1>${title}</h1><p class="muted">${sub}</p></div>
-    ${notice ? `<p class="notice">${esc(notice)}</p>` : ''}
+    ${notice ? `<p class="notice ${ui.authWarn ? 'warn' : ''}">${esc(notice)}</p>` : ''}
     ${reset ? '' : `<div class="seg auth-tabs">
       <a href="#/account/signup" class="${signup ? 'on' : ''}">Créer un compte</a>
       <a href="#/account/login" class="${signup ? '' : 'on'}">Se connecter</a></div>`}
@@ -648,6 +667,29 @@ function viewAccount(mode) {
   </div>`;
 }
 
+// Choix d'un nouveau mot de passe : après le lien « mot de passe oublié », ou depuis Profil.
+function viewNewPassword() {
+  if (!Auth.user()) {
+    return `<div class="auth">
+      <div class="auth-head">${logo('big')}<h1>Lien expiré</h1>
+        <p class="muted">Ce lien n’est plus valable. Demande un nouveau lien pour choisir ton mot de passe.</p></div>
+      <a class="btn primary block" href="#/account/reset">Recevoir un nouveau lien</a>
+    </div>`;
+  }
+  const fromEmail = Auth.isRecovery();
+  return `<div class="auth">
+    ${fromEmail ? '' : `<button class="icon-btn" data-action="back" aria-label="Retour">${icon('back')}</button>`}
+    <div class="auth-head">${logo('big')}<h1>Nouveau mot de passe</h1>
+      <p class="muted">${fromEmail ? 'Choisis ton nouveau mot de passe pour' : 'Compte'} ${esc(Auth.user().email)}</p></div>
+    <form class="auth-form" data-form="newpass" novalidate>
+      <label class="field"><span>Nouveau mot de passe</span><input name="password" type="password" minlength="6" autocomplete="new-password" required><small>6 caractères minimum</small></label>
+      <label class="field"><span>Confirme le mot de passe</span><input name="confirm" type="password" minlength="6" autocomplete="new-password" required></label>
+      <p class="form-error" hidden></p>
+      <button class="btn primary block" type="submit">Enregistrer le mot de passe</button>
+    </form>
+  </div>`;
+}
+
 // ——— Feuille d'ajout / de position ———
 
 function openAddSheet(title) {
@@ -660,8 +702,8 @@ function openAddSheet(title) {
     Promise.all([C.details(title, s), C.providers(title, s).catch(() => null)])
       .then(([full, prov]) => {
         if (ui.sheet?.title.id !== title.id) return;
-        Object.assign(ui.sheet, { title: full, providers: prov, loading: false });
-        if (prov?.length) ui.sheet.platform = preferredPlatform(prov);
+        Object.assign(ui.sheet, { title: full, providers: prov?.included ?? null, paid: prov?.paid ?? [], loading: false });
+        if (prov) ui.sheet.platform = preferredPlatform(prov.included, prov.paid);
         renderSheet();
       })
       .catch(() => {
@@ -672,9 +714,10 @@ function openAddSheet(title) {
 }
 
 // Plateforme proposée : disponible ET dans les abonnements, sinon disponible, sinon un abonnement.
-function preferredPlatform(providers) {
+function preferredPlatform(providers, paid = []) {
   const subs = subscriptions();
-  return providers?.find((p) => subs.includes(p)) || providers?.[0] || subs[0] || 'netflix';
+  return providers?.find((p) => subs.includes(p)) || providers?.[0]
+    || paid.find((p) => subs.includes(p)) || paid[0] || subs[0] || 'netflix';
 }
 
 function openPositionSheet(entry) {
@@ -762,6 +805,16 @@ function renderSheet() {
   const sh = ui.sheet;
   if (!sh) return;
   if (sh.mode === 'manual') return showSheet(root, manualForm(sh), sh.editId ? 'Modifier le titre' : 'Ajouter manuellement');
+  if (sh.mode === 'delete') {
+    return showSheet(root, `<div class="delete-head"><span class="delete-icon">${icon('trash')}</span>
+        <h3 class="sheet-title">Supprimer ton compte ?</h3>
+        <p class="muted">C’est définitif : ton compte <b>${esc(Auth.user()?.email || '')}</b>, ta bibliothèque, ta progression et tes abonnements seront effacés. Impossible de revenir en arrière.</p></div>
+      <label class="field"><span>Pour confirmer, tape <b>SUPPRIMER</b></span>
+        <input data-input="deleteConfirm" value="${esc(sh.confirm || '')}" autocomplete="off" autocapitalize="characters" placeholder="SUPPRIMER"></label>
+      <p class="form-error" ${sh.error ? '' : 'hidden'}>${esc(sh.error || '')}</p>
+      <button class="btn danger-solid block" data-action="confirmDelete" ${sh.confirm?.trim().toUpperCase() === 'SUPPRIMER' && !sh.busy ? '' : 'disabled'}>${sh.busy ? 'Suppression…' : 'Supprimer définitivement'}</button>
+      <button class="btn ghost block" data-action="closeSheet">Annuler</button>`, 'Supprimer mon compte');
+  }
   const t = sh.title;
   let body;
 
@@ -784,7 +837,8 @@ function renderSheet() {
       ${sh.error ? `<p class="hint warn">${esc(sh.error)}</p>` : ''}
       <div class="sheet-sec"><h4>Tu regardes sur</h4>
         <div class="pick-grid">${PLATFORMS.map((pl) => `<button class="pick ${sh.platform === pl.id ? 'on' : ''}" style="--pc:${pl.color}" data-action="sheetPlatform" data-p="${pl.id}">
-          <i></i>${esc(pl.name)}${sh.providers?.includes(pl.id) ? '<small>dispo</small>' : ''}</button>`).join('')}</div>
+          <i></i>${esc(pl.name)}${sh.providers?.includes(pl.id) ? '<small>inclus</small>' : sh.paid?.includes(pl.id) ? '<small class="paid">achat</small>' : ''}</button>`).join('')}</div>
+        ${sh.paid?.includes(sh.platform) && !sh.providers?.includes(sh.platform) ? `<p class="hint warn">Sur ${esc(platform(sh.platform).name)}, ce titre n’est pas inclus dans l’abonnement : seulement à l’achat ou en location.</p>` : ''}
       </div>
       <div class="sheet-sec"><h4>Statut</h4>
         <div class="seg">${statuses.map(([k, l]) => `<button class="${sh.status === k ? 'on' : ''}" data-action="sheetStatus" data-status="${k}">${l}</button>`).join('')}</div>
@@ -891,7 +945,7 @@ const actions = {
   sheetSave() {
     const sh = ui.sheet;
     S.add(sh.title, { platform: sh.platform, status: sh.status, next: { s: sh.s, e: sh.e }, minutes: sh.minutes });
-    if (sh.providers && sh.title.source === 'tmdb') S.setProviders(sh.title.id, sh.providers);
+    if (sh.providers && sh.title.source === 'tmdb') S.setProviders(sh.title.id, sh.providers, sh.paid || []);
     closeSheet();
     toast(`<b>${esc(sh.title.name)}</b> ajouté`);
     location.hash = `#/title/${encodeURIComponent(sh.title.id)}`;
@@ -909,6 +963,29 @@ const actions = {
     a.download = `next-up-${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(a.href);
+  },
+  askDelete() {
+    ui.sheet = { mode: 'delete', confirm: '' };
+    renderSheet();
+    setTimeout(() => $('[data-input=deleteConfirm]')?.focus(), 350);
+  },
+  async confirmDelete() {
+    const sh = ui.sheet;
+    if (sh.confirm.trim().toUpperCase() !== 'SUPPRIMER') return;
+    sh.busy = true;
+    sh.error = null;
+    renderSheet();
+    try {
+      await Auth.deleteAccount();
+      closeSheet();
+      S.updateSettings({ subscriptions: [] });
+      location.hash = '#/';
+      toast('Ton compte a été supprimé');
+    } catch (e) {
+      sh.busy = false;
+      sh.error = e.message;
+      renderSheet();
+    }
   },
   toggleSub({ p }) {
     const subs = subscriptions();
@@ -992,6 +1069,12 @@ document.addEventListener('input', (ev) => {
     runSearch();
     return;
   }
+  if (el.dataset.input === 'deleteConfirm' && ui.sheet?.mode === 'delete') {
+    ui.sheet.confirm = el.value;
+    const ok = el.value.trim().toUpperCase() === 'SUPPRIMER';
+    $('[data-action=confirmDelete]').disabled = !ok;
+    return;
+  }
   if (el.dataset.mf && ui.sheet?.form) {
     ui.sheet.form[el.dataset.mf] = el.type === 'checkbox' ? el.checked : el.value;
     return;
@@ -1022,6 +1105,29 @@ document.addEventListener('change', (ev) => {
     el.files[0].text().then((txt) => {
       try { S.importData(txt); toast('Bibliothèque importée'); } catch { toast('Fichier invalide'); }
     });
+  }
+});
+
+document.addEventListener('submit', async (ev) => {
+  const form = ev.target;
+  if (form.dataset.form !== 'newpass') return;
+  ev.preventDefault();
+  const data = new FormData(form);
+  const password = String(data.get('password') || '');
+  const error = form.querySelector('.form-error');
+  const fail = (message) => { error.textContent = message; error.hidden = false; };
+  error.hidden = true;
+  if (password.length < 6) return fail('Le mot de passe doit faire au moins 6 caractères.');
+  if (password !== data.get('confirm')) return fail('Les deux mots de passe ne sont pas identiques.');
+  const button = form.querySelector('[type=submit]');
+  button.disabled = true;
+  try {
+    await Auth.updatePassword(password);
+    location.hash = '#/';
+    toast('Mot de passe enregistré');
+  } catch (e) {
+    fail(e.message);
+    button.disabled = false;
   }
 });
 
@@ -1077,7 +1183,8 @@ document.addEventListener('submit', async (ev) => {
       }
     } else {
       await Auth.resetPassword(email);
-      ui.authNotice = `Si un compte existe pour ${email}, un e-mail vient d’être envoyé.`;
+      ui.authNotice = `Si un compte existe pour ${email}, un e-mail vient d’être envoyé. Ouvre le lien qu’il contient pour choisir un nouveau mot de passe.`;
+      ui.authWarn = false;
       location.hash = '#/account/login';
     }
   } catch (e) {
@@ -1156,8 +1263,8 @@ async function refreshEntry(entry, force = false) {
   ui.loading.add(entry.id);
   try {
     const s = S.settings();
-    const [title, providers] = await Promise.all([C.details(entry.title, s), C.providers(entry.title, s)]);
-    S.setProviders(entry.id, providers);
+    const [title, avail] = await Promise.all([C.details(entry.title, s), C.providers(entry.title, s)]);
+    if (avail) S.setProviders(entry.id, avail.included, avail.paid);
     S.updateTitle(entry.id, title);
   } catch { /* hors ligne ou clé absente : on garde les données en cache */ }
   ui.loading.delete(entry.id);
@@ -1276,6 +1383,16 @@ async function boot() {
     }
   } catch {
     // Hors ligne : on continue avec la bibliothèque enregistrée sur l'appareil.
+  }
+  const linkError = Auth.takeLinkError();
+  if (Auth.isRecovery() && Auth.user()) {
+    location.hash = '#/account/new-password';
+  } else if (linkError) {
+    ui.authNotice = 'Ce lien a expiré ou a déjà été utilisé. Demande un nouveau lien ci-dessous.';
+    ui.authWarn = true;
+    location.hash = '#/account/reset';
+  } else if (/access_token|type=/.test(location.hash)) {
+    location.hash = '#/';
   }
   window.dispatchEvent(new HashChangeEvent('hashchange'));
   refreshLibrary();

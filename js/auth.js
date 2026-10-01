@@ -7,18 +7,40 @@ export const functionUrl = (name) => `${SUPABASE_URL}/functions/v1/${name}`;
 
 let client = null;
 let session = null;
+let ready = false;
+let recovery = false;
+let linkError = null;
 const listeners = new Set();
+
+// Arrivée depuis le lien « mot de passe oublié » : l'utilisateur doit choisir un nouveau mot de passe.
+export const isRecovery = () => recovery;
+// Lien expiré ou déjà utilisé (renvoyé par Supabase dans l'adresse).
+export const takeLinkError = () => {
+  const e = linkError;
+  linkError = null;
+  return e;
+};
 
 export async function init() {
   if (!enabled) return;
+  const hash = location.hash;
+  if (/type=recovery/.test(hash)) recovery = true;
+  const error = /error_code=([^&]+)/.exec(hash);
+  if (error) {
+    linkError = decodeURIComponent(error[1]);
+    history.replaceState(null, '', location.pathname + location.search);
+  }
   const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm');
-  client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-  session = (await client.auth.getSession()).data.session;
-  client.auth.onAuthStateChange((_event, next) => {
+  // Flux « implicit » : le lien reçu par e-mail fonctionne même s'il s'ouvre dans un autre navigateur.
+  client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { flowType: 'implicit' } });
+  client.auth.onAuthStateChange((event, next) => {
+    if (event === 'PASSWORD_RECOVERY') recovery = true;
     const changed = next?.user?.id !== session?.user?.id;
     session = next;
-    if (changed) listeners.forEach((fn) => fn(next?.user || null));
+    if (ready && changed) listeners.forEach((fn) => fn(next?.user || null));
   });
+  session = (await client.auth.getSession()).data.session;
+  ready = true;
 }
 
 export const onChange = (fn) => listeners.add(fn);
@@ -35,6 +57,8 @@ const MESSAGES = [
   [/invalid email|unable to validate email/i, 'Cette adresse e-mail n’est pas valide.'],
   [/rate limit|too many/i, 'Trop de tentatives, réessaie dans quelques minutes.'],
   [/fetch|network/i, 'Pas de connexion internet.'],
+  [/different from the old password/i, 'Choisis un mot de passe différent de l’ancien.'],
+  [/reauthentication|session.*missing|not authenticated/i, 'Le lien a expiré. Demande un nouveau lien.'],
 ];
 const frenchError = (error) => new Error(MESSAGES.find(([re]) => re.test(error.message))?.[1] || error.message);
 
@@ -56,6 +80,23 @@ export async function signIn(email, password) {
 export async function resetPassword(email) {
   const { error } = await client.auth.resetPasswordForEmail(email, { redirectTo: location.origin + location.pathname });
   if (error) throw frenchError(error);
+}
+
+export async function updatePassword(password) {
+  const { error } = await client.auth.updateUser({ password });
+  if (error) throw frenchError(error);
+  recovery = false;
+}
+
+// Suppression définitive du compte et de sa bibliothèque, par la fonction serveur « delete-account ».
+export async function deleteAccount() {
+  const res = await fetch(functionUrl('delete-account'), {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token()}`, apikey: anonKey },
+  });
+  if (!res.ok) throw new Error('La suppression a échoué. Réessaie dans un instant.');
+  // Le compte n'existe plus côté serveur : on ferme la session sur cet appareil.
+  await client.auth.signOut({ scope: 'local' });
 }
 
 export const updateName = (name) => updateMeta({ name });

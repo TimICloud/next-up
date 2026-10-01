@@ -272,6 +272,10 @@ p { margin: 0; }
   border-radius: var(--radius-sm); background: var(--bg-2); border: 1px solid var(--line);
   font-size: 14px; font-weight: 600; text-align: left; transition: border-color 0.15s, background 0.15s;
 }
+.pick small.paid { background: rgba(251, 191, 36, 0.15); color: var(--warn); }
+.avail-kind { margin: 10px 0 6px; color: var(--muted); font-size: 12px; font-weight: 600; }
+.avail .label + .avail-kind { margin-top: 2px; }
+.pchip em.paid { font-style: normal; color: var(--warn); font-weight: 800; }
 .pick small { margin-left: auto; padding: 1px 6px; border-radius: 6px; background: rgba(52, 211, 153, 0.15); color: var(--ok); font-size: 10px; font-weight: 700; }
 .pick:hover { border-color: var(--line-2); }
 .pick.on { border-color: transparent; background: linear-gradient(var(--surface-2), var(--surface-2)) padding-box, var(--grad) border-box; border: 1.5px solid transparent; }
@@ -524,6 +528,16 @@ p { margin: 0; }
 .field.first { margin-top: 0; }
 .auth-form .btn.block { height: 52px; margin-top: 16px; }
 .form-error { margin-top: 10px; padding: 10px 12px; border-radius: 12px; background: rgba(251, 113, 133, 0.12); color: var(--danger); font-size: 14px; }
+.notice.warn { background: rgba(251, 191, 36, 0.12); color: var(--warn); }
+.danger-zone { border-color: rgba(251, 113, 133, 0.25); }
+.danger-zone .card-title .ic { color: var(--danger); }
+.danger-zone .btn { margin-top: 14px; }
+.btn.danger-solid { background: #e11d48; border-color: transparent; color: #fff; }
+.btn.danger-solid:disabled { opacity: 0.4; }
+.delete-head { display: grid; justify-items: center; gap: 6px; margin-bottom: 18px; text-align: center; }
+.delete-head .muted { font-size: 14px; }
+.delete-icon { display: grid; place-items: center; width: 56px; height: 56px; border-radius: 18px; background: rgba(251, 113, 133, 0.15); color: var(--danger); }
+.delete-icon .ic { width: 26px; height: 26px; }
 .notice { margin-bottom: 18px; padding: 12px 14px; border-radius: 14px; background: rgba(52, 211, 153, 0.12); color: var(--ok); font-size: 14px; }
 .link.center { display: block; margin: 18px auto 0; text-align: center; width: fit-content; }
 .perks { display: grid; gap: 10px; margin: 26px 0 0; padding: 18px; list-style: none; border-radius: var(--radius); background: var(--surface); border: 1px solid var(--line); font-size: 14px; }

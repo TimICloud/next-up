@@ -230,10 +230,11 @@ export function setPlatform(id, platform) {
   commit();
 }
 
-export function setProviders(id, providers) {
+export function setProviders(id, providers, paid = []) {
   const entry = state.entries[id];
   if (!entry) return;
   entry.providers = providers;
+  entry.paidProviders = paid;
   entry.providersAt = Date.now();
   persist();
 }
@@ -241,13 +242,20 @@ export function setProviders(id, providers) {
 // Alerte quand la série n'est plus disponible sur la plateforme où l'utilisateur la regarde.
 // Avec des abonnements renseignés, seules les séries regardées sur une de ces plateformes déclenchent l'alerte,
 // et les plateformes auxquelles l'utilisateur est abonné sont proposées en premier.
+// Renvoie { to: plateformes où le titre est inclus (abonnements d'abord), paidOnly: plus inclus, seulement
+// à l'achat/location sur la plateforme actuelle } ou null s'il n'y a rien à signaler.
 export function platformAlert(entry, subs = []) {
   const list = entry.providers;
-  if (!list || !list.length || entry.status === 'completed' || entry.platform === 'other') return null;
+  const paid = entry.paidProviders || [];
+  if (!list || entry.status === 'completed' || entry.platform === 'other') return null;
   if (list.includes(entry.platform)) return null;
+  if (!list.length && !paid.length) return null;
   if (subs.length && !subs.includes(entry.platform)) return null;
-  if (entry.alertAck === list.join(',')) return null;
-  return [...list].sort((a, b) => subs.includes(b) - subs.includes(a));
+  if (entry.alertAck === `${list.join(',')}|${paid.join(',')}`) return null;
+  return {
+    to: [...list].sort((a, b) => subs.includes(b) - subs.includes(a)),
+    paidOnly: paid.includes(entry.platform),
+  };
 }
 
 // Le titre peut-il être regardé avec les abonnements de l'utilisateur ?
@@ -259,7 +267,7 @@ export function availableForMe(entry, subs) {
 
 export function ackAlert(id) {
   const entry = state.entries[id];
-  entry.alertAck = (entry.providers || []).join(',');
+  entry.alertAck = `${(entry.providers || []).join(',')}|${(entry.paidProviders || []).join(',')}`;
   touch(entry);
   commit();
 }

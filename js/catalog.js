@@ -201,14 +201,18 @@ export async function details(title) {
   return t;
 }
 
-// Plateformes où le titre est disponible dans le pays choisi (abonnement, gratuit ou avec pub).
+// Disponibilité dans le pays choisi :
+// - included : inclus dans l'abonnement (ou gratuit / avec pub) ;
+// - paid : seulement à l'achat ou en location, en plus de l'abonnement (ex. certains titres sur Prime Video).
 export async function providers(title, settings) {
-  if (title.source !== 'tmdb') return title.providers || [];
+  if (title.source !== 'tmdb') return { included: title.providers || [], paid: [] };
   if (!live()) return null;
   const d = await call(`/${title.type}/${title.tmdbId}/watch/providers`);
   const r = d.results?.[settings.region];
-  const list = [...(r?.flatrate || []), ...(r?.free || []), ...(r?.ads || [])];
-  return [...new Set(list.map((p) => matchProvider(p.provider_name)).filter(Boolean))];
+  const ids = (list) => [...new Set((list || []).map((p) => matchProvider(p.provider_name)).filter(Boolean))];
+  const included = ids([...(r?.flatrate || []), ...(r?.free || []), ...(r?.ads || [])]);
+  const paid = ids([...(r?.rent || []), ...(r?.buy || [])]).filter((id) => !included.includes(id));
+  return { included, paid };
 }
 
 export async function seasonEpisodes(title, season) {
