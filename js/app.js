@@ -462,6 +462,7 @@ function progressCardTV(e, p) {
     ${bar(p.pct)}
     <div class="pc-meta"><span>${p.watched} / ${p.total} épisodes</span><span>${Math.round(p.pct * 100)} %</span></div>
     ${p.next && p.nextAired ? episodeMinutes(e, p) : ''}
+    ${watchButton(e)}
     <button class="link" data-action="position" data-id="${esc(e.id)}">Modifier où j’en suis</button>
   </section>`;
 }
@@ -492,7 +493,24 @@ function progressCardMovie(e, p) {
     </div>
     ${p.done ? bar(1) : `<input class="range" type="range" min="0" max="${runtime}" step="1" value="${e.minutes || 0}"
       data-input="minutes" data-id="${esc(e.id)}" aria-label="Minutes regardées" style="--v:${Math.round(p.pct * 100)}%">`}
+    ${watchButton(e)}
   </section>`;
+}
+
+// « Regarder sur Netflix » : ouvre la plateforme (son app sur téléphone) sur le titre, ou sa recherche.
+function watchButton(e) {
+  const link = C.watchLink(e.title, e.platform);
+  if (!link) return '';
+  const pf = platform(e.platform);
+  return `<a class="watch-btn" href="${esc(link.url)}" target="_blank" rel="noopener" style="--pc:${pf.color}">
+    ${icon('play')}<span>Regarder sur <b>${esc(pf.name)}</b>${S.purchaseOnly(e) ? ' <em>(achat)</em>' : ''}</span>${icon('external')}</a>`;
+}
+
+// Étiquette de plateforme cliquable (fiche, disponibilités).
+function watchChip(e, id, extra = '') {
+  const link = C.watchLink(e.title, id);
+  const inner = chip(id).replace('</span>', `${extra} ${icon('external', 'chip-ext')}</span>`);
+  return link ? `<a class="chip-link" href="${esc(link.url)}" target="_blank" rel="noopener" aria-label="Ouvrir sur ${esc(platform(id).name)}">${inner}</a>` : chip(id);
 }
 
 // Carte de la fiche d'un titre : même en-tête partout (nom à gauche, action à droite).
@@ -533,10 +551,10 @@ function availCard(e) {
     && Object.values(e.seasonAvail || {}).some((a) => a.paid.includes(e.platform) && !a.included.includes(e.platform));
   return detailCard(label, `
     ${avail.length ? `<p class="avail-kind">Inclus dans l’abonnement</p>
-      <div class="chips">${avail.map((id) => subs.includes(id) ? chip(id).replace('</span>', ` ${icon('check', 'mine')}</span>`) : chip(id)).join('')}</div>`
+      <div class="chips">${avail.map((id) => watchChip(e, id, subs.includes(id) ? ` ${icon('check', 'mine')}` : '')).join('')}</div>`
       : '<p class="muted">Inclus dans aucun abonnement pour l’instant.</p>'}
     ${e.paidProviders?.length ? `<p class="avail-kind">À l’achat ou en location</p>
-      <div class="chips">${e.paidProviders.map((id) => chip(id).replace('</span>', ' <em class="paid">€</em></span>')).join('')}</div>` : ''}
+      <div class="chips">${e.paidProviders.map((id) => watchChip(e, id, ' <em class="paid">€</em>')).join('')}</div>` : ''}
     ${mixedSeasons ? `<p class="hint warn">Sur ${esc(platform(e.platform).name)}, certaines saisons ne sont qu’à l’achat : détail par saison dans « Épisodes ».</p>` : ''}
     ${subs.length ? `<p class="hint">${avail.some((id) => subs.includes(id)) ? `${icon('check')} Inclus dans tes abonnements`
       : e.paidProviders?.some((id) => subs.includes(id)) ? 'Sur tes plateformes, mais seulement à l’achat ou en location (en plus de l’abonnement).'
@@ -1438,6 +1456,10 @@ async function refreshEntry(entry, force = false) {
     const s = S.settings();
     const [title, avail] = await Promise.all([C.details(entry.title, s), C.providers(entry.title, s)]);
     if (avail) S.setProviders(entry.id, avail.included, avail.paid);
+    // Liens directs vers le titre sur chaque plateforme (une fois par semaine suffit).
+    if (title.wikidataId && (!entry.title.watchLinks || Date.now() - (entry.title.watchLinksAt || 0) > 7 * 86400000)) {
+      C.watchIds(title).then((watchLinks) => S.updateTitle(entry.id, { watchLinks, watchLinksAt: Date.now() })).catch(() => {});
+    }
     const { next } = S.progress(entry);
     if (next) loadSeasonAvail(S.get(entry.id), next.s);
     S.updateTitle(entry.id, title);

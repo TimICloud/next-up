@@ -374,6 +374,24 @@ p { margin: 0; }
 .card-title h3 { font-size: 17px; }
 .card > .muted { font-size: 14px; }
 
+/* Regarder sur… */
+.watch-btn {
+  display: flex; align-items: center; gap: 12px; margin-top: 16px; padding: 13px 16px;
+  border-radius: 14px; text-decoration: none; font-size: 15px;
+  background: color-mix(in srgb, var(--pc) 14%, var(--bg-2)); border: 1px solid color-mix(in srgb, var(--pc) 40%, transparent);
+  transition: transform 0.15s, background 0.15s;
+}
+.watch-btn:hover { background: color-mix(in srgb, var(--pc) 22%, var(--bg-2)); }
+.watch-btn:active { transform: scale(0.98); }
+.watch-btn > .ic:first-child { width: 18px; height: 18px; color: var(--pc); }
+.watch-btn span { flex: 1; }
+.watch-btn em { font-style: normal; color: var(--warn); font-size: 13px; }
+.watch-btn > .ic:last-child { width: 16px; height: 16px; color: var(--muted); }
+.chip-link { text-decoration: none; }
+.chip-link .pchip { transition: border-color 0.15s, background 0.15s; }
+.chip-link:hover .pchip { border-color: var(--line-2); background: rgba(255, 255, 255, 0.12); }
+.pchip .chip-ext { width: 11px; height: 11px; margin-left: 2px; opacity: 0.55; }
+
 /* Cartes de la fiche : en-tête, espacements et fonds identiques */
 .detail .card { margin-bottom: 12px; }
 .card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 34px; margin-bottom: 12px; }

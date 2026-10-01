@@ -178,8 +178,9 @@ export async function suggestions() {
 // Complète un titre : saisons et nombre d'épisodes, durée, statut (terminée ou en cours de diffusion).
 export async function details(title) {
   if (title.source !== 'tmdb' || !live()) return title;
-  const d = await call(`/${title.type}/${title.tmdbId}`);
+  const d = await call(`/${title.type}/${title.tmdbId}`, { append_to_response: 'external_ids' });
   const t = { ...title, ...fromTmdb(d, title.type), genres: (d.genres || []).map((g) => g.name), refreshedAt: Date.now() };
+  t.wikidataId = d.external_ids?.wikidata_id || title.wikidataId || null;
   if (!t.overview) t.overview = title.overview;
   if (title.type === 'tv') {
     t.seasons = (d.seasons || [])
@@ -222,6 +223,49 @@ export async function providers(title, settings) {
 export async function seasonProviders(title, season, settings) {
   if (title.source !== 'tmdb' || title.type !== 'tv' || !live()) return null;
   return parseProviders(await call(`/tv/${title.tmdbId}/season/${season}/watch/providers`), settings.region);
+}
+
+// ——— Liens « Regarder sur… » ———
+// Identifiants des plateformes enregistrés dans Wikidata (base libre liée à Wikipédia) :
+// lien direct vers la série ou le film quand on les connaît.
+const WIKIDATA_PROPS = {
+  netflix: [['P1874', (id) => `https://www.netflix.com/title/${id}`]],
+  prime: [['P14440', (id) => `https://www.primevideo.com/detail/${id}`], ['P8055', (id) => `https://www.primevideo.com/detail/${id}`]],
+  disney: [['P7596', (id) => `https://www.disneyplus.com/series/wp/${id}`], ['P7595', (id) => `https://www.disneyplus.com/movies/wd/${id}`]],
+  apple: [['P9751', (id) => `https://tv.apple.com/show/${id}`], ['P9586', (id) => `https://tv.apple.com/movie/${id}`]],
+};
+
+// Sinon : la recherche de la plateforme, titre déjà tapé.
+const SEARCH = {
+  netflix: (q) => `https://www.netflix.com/search?q=${q}`,
+  prime: (q) => `https://www.primevideo.com/-/fr/search/ref=atv_nb_sug?ie=UTF8&phrase=${q}`,
+  disney: (q) => `https://www.disneyplus.com/search?q=${q}`,
+  apple: (q) => `https://tv.apple.com/search?term=${q}`,
+  max: (q) => `https://play.hbomax.com/search?q=${q}`,
+  paramount: (q) => `https://www.paramountplus.com/search/?q=${q}`,
+  canal: () => 'https://www.canalplus.com/',
+};
+
+export async function watchIds(title) {
+  if (!title.wikidataId) return {};
+  const url = `https://www.wikidata.org/w/api.php?action=wbgetentities&ids=${title.wikidataId}&props=claims&format=json&origin=*`;
+  const claims = Object.values((await (await fetch(url)).json()).entities || {})[0]?.claims || {};
+  const links = {};
+  for (const [pf, props] of Object.entries(WIKIDATA_PROPS)) {
+    for (const [prop, build] of props) {
+      const value = claims[prop]?.[0]?.mainsnak?.datavalue?.value;
+      if (value && !links[pf]) links[pf] = build(value);
+    }
+  }
+  return links;
+}
+
+// { url, exact } pour regarder le titre sur une plateforme, ou null (« Autre »).
+export function watchLink(title, platformId) {
+  const exact = title.watchLinks?.[platformId];
+  if (exact) return { url: exact, exact: true };
+  const search = SEARCH[platformId];
+  return search ? { url: search(encodeURIComponent(title.original || title.name)), exact: false } : null;
 }
 
 export async function seasonEpisodes(title, season) {
