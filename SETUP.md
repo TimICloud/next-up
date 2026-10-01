@@ -46,6 +46,10 @@ Menu **Authentication** → **Sign In / Providers** → **Email** : activé par 
 
 - **Pendant les tests**, tu peux désactiver « Confirm email » pour créer des comptes sans devoir cliquer sur un lien.
 - **Avant la publication**, réactive-le, et dans **URL Configuration** indique l'adresse de l'app en ligne.
+- **Réglage actuel (tests sur le réseau local)** : Site URL `http://192.168.1.7:8770`, Redirect URLs
+  `http://192.168.1.7:8770/**` et `http://localhost:8770/**` (nécessaire pour le lien « mot de passe oublié »).
+- **Fonction `delete-account`** : à déployer comme `tmdb` (code dans `supabase/functions/delete-account/index.ts`),
+  pour la suppression de compte depuis Profil.
 
 ## 6. Relier l'app au serveur
 
