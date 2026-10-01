@@ -221,6 +221,14 @@ export function setMinutes(id, minutes) {
 
 // ——— Plateformes ———
 
+// « Regardé avec » : liste vide = l'utilisateur regarde seul (par défaut).
+export function setWatchedWith(id, people) {
+  const entry = state.entries[id];
+  entry.watchedWith = people;
+  touch(entry);
+  commit();
+}
+
 export function setPlatform(id, platform) {
   const entry = state.entries[id];
   if (entry.platform === platform) return;

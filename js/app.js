@@ -64,6 +64,15 @@ function upcoming() {
   return { items, fresh, tbd };
 }
 
+// Personnes avec qui on regarde un titre (en plus de celles créées par l'utilisateur).
+const COMPANIONS = [
+  ['Famille', '👨‍👩‍👧'], ['Copine', '❤️'], ['Copain', '❤️'], ['Mère', '👩'], ['Père', '👨'],
+  ['Sœur', '👧'], ['Frère', '👦'], ['Enfants', '🧒'], ['Amis', '🙌'], ['Colocs', '🏠'],
+];
+const companionEmoji = (name) => COMPANIONS.find(([n]) => n === name)?.[1] || '👤';
+const withChip = (name) => `<span class="with-chip static"><span>${companionEmoji(name)}</span>${esc(name)}</span>`;
+const withText = (people) => people.join(', ').replace(/, ([^,]*)$/, ' et $1');
+
 const STATUS = {
   watching: 'En cours',
   paused: 'En pause',
@@ -214,7 +223,7 @@ function resumeCard(e, p) {
       <h3>${esc(t.name)}</h3>
       <p class="next">${nextLine(e, p)}</p>
       ${bar(p.pct)}
-      <p class="meta">${p.movie ? `${Math.round(p.pct * 100)} %` : `${p.watched} / ${p.total} épisodes`}</p>
+      <p class="meta">${p.movie ? `${Math.round(p.pct * 100)} %` : `${p.watched} / ${p.total} épisodes`}${e.watchedWith?.length ? ` · <span class="with-meta">avec ${esc(withText(e.watchedWith))}</span>` : ''}</p>
     </div>
     ${p.movie
       ? `<button class="plus done-btn" data-action="movieDone" data-id="${esc(e.id)}" aria-label="Marquer comme vu">${icon('check')}</button>`
@@ -416,6 +425,7 @@ function viewTitle(id) {
     ${alertTo ? alertCard(e, alertTo) : ''}
 
     ${t.type === 'tv' ? progressCardTV(e, p) : progressCardMovie(e, p)}
+    ${withCard(e)}
     ${platformCard(e)}
     ${t.type === 'tv' ? episodesSection(e, p) : ''}
 
@@ -470,6 +480,17 @@ function progressCardMovie(e, p) {
     </div>
     ${p.done ? bar(1) : `<input class="range" type="range" min="0" max="${runtime}" step="1" value="${e.minutes || 0}"
       data-input="minutes" data-id="${esc(e.id)}" aria-label="Minutes regardées" style="--v:${Math.round(p.pct * 100)}%">`}
+  </section>`;
+}
+
+function withCard(e) {
+  const people = e.watchedWith || [];
+  return `<section class="card with-card">
+    <div class="card-row">
+      <div><span class="label">Regardé avec</span>
+        <div class="chips">${people.length ? people.map(withChip).join('') : '<span class="with-chip static alone"><span>🙋</span>Juste moi</span>'}</div></div>
+      <button class="btn small ghost" data-action="editWith" data-id="${esc(e.id)}">Modifier</button>
+    </div>
   </section>`;
 }
 
@@ -805,6 +826,21 @@ function renderSheet() {
   const sh = ui.sheet;
   if (!sh) return;
   if (sh.mode === 'manual') return showSheet(root, manualForm(sh), sh.editId ? 'Modifier le titre' : 'Ajouter manuellement');
+  if (sh.mode === 'with') {
+    const used = S.entries().flatMap((x) => x.watchedWith || []);
+    const options = [...new Set([...COMPANIONS.map(([n]) => n), ...used, ...sh.people])];
+    return showSheet(root, `<h3 class="sheet-title">Tu regardes avec qui ?</h3>
+      <p class="muted">Pratique si tu suis la même série avec différentes personnes. Tu peux en choisir plusieurs.</p>
+      <div class="with-grid">
+        <button class="with-chip ${sh.people.length ? '' : 'on'}" data-action="withAlone"><span>🙋</span>Juste moi</button>
+        ${options.map((n) => `<button class="with-chip ${sh.people.includes(n) ? 'on' : ''}" data-action="withToggle" data-v="${esc(n)}"><span>${companionEmoji(n)}</span>${esc(n)}</button>`).join('')}
+      </div>
+      <form class="with-add" data-form="withAdd">
+        <input name="who" maxlength="24" placeholder="Autre : un prénom, un groupe…" autocomplete="off">
+        <button class="btn" type="submit">${icon('plus')} Ajouter</button>
+      </form>
+      <button class="btn primary block" data-action="withSave">Enregistrer</button>`, 'Regardé avec');
+  }
   if (sh.mode === 'delete') {
     return showSheet(root, `<div class="delete-head"><span class="delete-icon">${icon('trash')}</span>
         <h3 class="sheet-title">Supprimer ton compte ?</h3>
@@ -964,6 +1000,22 @@ const actions = {
     a.click();
     URL.revokeObjectURL(a.href);
   },
+  editWith({ id }) {
+    ui.sheet = { mode: 'with', entryId: id, people: [...(S.get(id).watchedWith || [])] };
+    renderSheet();
+  },
+  withAlone() { ui.sheet.people = []; renderSheet(); },
+  withToggle({ v }) {
+    const people = ui.sheet.people;
+    ui.sheet.people = people.includes(v) ? people.filter((x) => x !== v) : [...people, v];
+    renderSheet();
+  },
+  withSave() {
+    const { entryId, people } = ui.sheet;
+    S.setWatchedWith(entryId, people);
+    closeSheet();
+    toast(people.length ? `Regardé avec <b>${esc(withText(people))}</b>` : 'Regardé <b>juste par toi</b>');
+  },
   askDelete() {
     ui.sheet = { mode: 'delete', confirm: '' };
     renderSheet();
@@ -1106,6 +1158,17 @@ document.addEventListener('change', (ev) => {
       try { S.importData(txt); toast('Bibliothèque importée'); } catch { toast('Fichier invalide'); }
     });
   }
+});
+
+document.addEventListener('submit', (ev) => {
+  const form = ev.target;
+  if (form.dataset.form !== 'withAdd') return;
+  ev.preventDefault();
+  const raw = String(new FormData(form).get('who') || '').trim();
+  if (!raw || !ui.sheet) return;
+  const name = raw.charAt(0).toUpperCase() + raw.slice(1);
+  if (!ui.sheet.people.includes(name)) ui.sheet.people.push(name);
+  renderSheet();
 });
 
 document.addEventListener('submit', async (ev) => {

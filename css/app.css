@@ -606,6 +606,26 @@ p { margin: 0; }
 .up-when small { color: var(--muted); font-size: 12px; }
 .mini-spinner { width: 18px; height: 18px; border-radius: 50%; border: 2.5px solid var(--surface-2); border-top-color: var(--pink); animation: spin 0.8s linear infinite; }
 
+/* ——— Regardé avec ——— */
+.with-card .chips { margin-top: 4px; }
+.with-chip {
+  display: inline-flex; align-items: center; gap: 7px; padding: 9px 14px 9px 11px;
+  border-radius: 99px; background: var(--bg-2); border: 1px solid var(--line-2);
+  font-size: 14px; font-weight: 600; transition: all 0.15s;
+}
+.with-chip > span { font-size: 15px; line-height: 1; }
+.with-chip.static { padding: 6px 12px 6px 9px; font-size: 13px; background: rgba(255, 255, 255, 0.06); }
+.with-chip.alone { color: var(--muted); }
+.with-chip.on { background: linear-gradient(var(--surface-2), var(--surface-2)) padding-box, var(--grad) border-box; border-color: transparent; }
+.with-grid { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0; }
+.with-add { display: flex; gap: 8px; margin-bottom: 8px; }
+.with-add input {
+  flex: 1; min-width: 0; height: 46px; padding: 0 14px; border-radius: 14px; outline: 0;
+  background: var(--surface); border: 1px solid var(--line-2); color: var(--text); font-size: 15px;
+}
+.with-add input:focus { border-color: var(--violet); }
+.with-meta { color: #f0abfc; }
+
 /* ——— Ajout manuel ——— */
 .manual-cta {
   display: flex; align-items: center; gap: 14px; width: 100%; margin-top: 28px; padding: 16px;
