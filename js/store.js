@@ -88,6 +88,9 @@ export function progress(entry) {
   });
   const next = eps[lastIdx + 1] || null;
   const nextAired = next ? isAired(t, next) : false;
+  // Minutes déjà regardées de l'épisode en cours (seulement si c'est bien le prochain épisode).
+  const ep = entry.epProgress;
+  const nextMinutes = next && ep && ep.s === next.s && ep.e === next.e ? ep.minutes : 0;
   return {
     watched,
     total: eps.length,
@@ -95,6 +98,7 @@ export function progress(entry) {
     last: eps[lastIdx] || null,
     next,
     nextAired,
+    nextMinutes,
     finished: !next && !!t.ended,
     // Tout ce qui est sorti a été vu, la suite n'est pas encore diffusée.
     upToDate: !t.ended && (!next || !nextAired) && watched > 0,
@@ -114,6 +118,7 @@ export function plusOne(id) {
   if (!p.next || !p.nextAired) return null;
   const before = clone(entry);
   entry.watched.push(epKey(p.next));
+  entry.epProgress = null;
   entry.status = 'watching';
   entry.lastWatchedAt = Date.now();
   if (progress(entry).finished) entry.status = 'completed';
@@ -134,12 +139,27 @@ function watchedBefore(title, next) {
     .map(epKey);
 }
 
-export function setPosition(id, next) {
+export function setPosition(id, next, minutes = 0) {
   const entry = state.entries[id];
   entry.watched = watchedBefore(entry.title, next);
-  if (entry.watched.length) {
+  entry.epProgress = minutes > 0 ? { s: next.s, e: next.e, minutes } : null;
+  if (entry.watched.length || minutes > 0) {
     entry.status = 'watching';
     entry.lastWatchedAt = Date.now();
+  }
+  touch(entry);
+  commit();
+}
+
+// Minutes regardées de l'épisode en cours (le prochain à voir).
+export function setEpisodeMinutes(id, minutes) {
+  const entry = state.entries[id];
+  const { next } = progress(entry);
+  if (!next) return;
+  entry.epProgress = minutes > 0 ? { s: next.s, e: next.e, minutes } : null;
+  if (minutes > 0) {
+    entry.lastWatchedAt = Date.now();
+    if (entry.status === 'planned' || entry.status === 'paused') entry.status = 'watching';
   }
   touch(entry);
   commit();

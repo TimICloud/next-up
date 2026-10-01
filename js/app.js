@@ -74,6 +74,7 @@ function nextLine(entry, p) {
   }
   if (p.finished) return 'Série terminée';
   if (p.upToDate) return 'À jour · en attente de la suite';
+  if (p.next && p.nextMinutes) return `Reprendre · <b>${epLabel(p.next)}</b> à ${p.nextMinutes} min`;
   if (p.next) return `Prochain · <b>${epLabel(p.next)}</b>`;
   return '';
 }
@@ -291,14 +292,29 @@ function progressCardTV(e, p) {
   let head;
   if (p.finished) head = `<span class="label">Bravo</span><div class="big">Série terminée</div>`;
   else if (p.upToDate) head = `<span class="label">Tu es à jour</span><div class="big">${p.next ? `${epLabel(p.next)} bientôt` : 'Suite à venir'}</div>`;
-  else head = `<span class="label">${p.watched ? 'Prochain épisode' : 'Pour commencer'}</span><div class="big">${epLabel(p.next)}</div>${epName ? `<span class="epname">${esc(epName)}</span>` : ''}`;
+  else head = `<span class="label">${p.nextMinutes ? 'Reprendre' : p.watched ? 'Prochain épisode' : 'Pour commencer'}</span><div class="big">${epLabel(p.next)}</div>${epName ? `<span class="epname">${esc(epName)}</span>` : ''}`;
 
   return `<section class="card progress-card">
     <div class="pc-top"><div>${head}</div>${plusButton(e, p, 'xl')}</div>
     ${bar(p.pct)}
     <div class="pc-meta"><span>${p.watched} / ${p.total} épisodes</span><span>${Math.round(p.pct * 100)} %</span></div>
+    ${p.next && p.nextAired ? episodeMinutes(e, p) : ''}
     <button class="link" data-action="position" data-id="${esc(e.id)}">Modifier où j’en suis</button>
   </section>`;
+}
+
+// Curseur « Arrêté à … min » pour l'épisode en cours.
+function episodeMinutes(e, p) {
+  const runtime = e.title.runtime || 60;
+  const m = Math.min(p.nextMinutes, runtime);
+  return `<div class="ep-minutes">
+    <div class="ep-minutes-head">
+      <span>${icon('clock')} Arrêté à <b data-out="epmin">${m} min</b></span>
+      <span class="muted">${epLabel(p.next)} · ${runtime} min</span>
+    </div>
+    <input class="range" type="range" min="0" max="${runtime}" step="1" value="${m}"
+      data-input="epMinutes" data-id="${esc(e.id)}" aria-label="Minutes regardées de ${epLabel(p.next)}" style="--v:${(m / runtime) * 100}%">
+  </div>`;
 }
 
 function progressCardMovie(e, p) {
@@ -364,7 +380,7 @@ function episodesSection(e, p) {
       return `<button class="ep ${on ? 'on' : ''} ${isNext ? 'next' : ''} ${aired ? '' : 'future'}" data-action="toggleEp" data-id="${esc(e.id)}" data-s="${season.n}" data-e="${n}">
         <span class="ep-n">${n}</span>
         <span class="ep-t">${names?.[n] ? esc(names[n]) : `Épisode ${n}`}</span>
-        <span class="ep-c">${on ? icon('check') : isNext ? '<em>Prochain</em>' : aired ? '' : '<em>À venir</em>'}</span>
+        <span class="ep-c">${on ? icon('check') : isNext ? `<em>${p.nextMinutes ? `${p.nextMinutes} min` : 'Prochain'}</em>` : aired ? '' : '<em>À venir</em>'}</span>
       </button>`;
     }).join('')}</div>
   </section>`;
@@ -510,7 +526,7 @@ function openAddSheet(title) {
 function openPositionSheet(entry) {
   const p = S.progress(entry);
   const next = p.next || p.last || { s: 1, e: 1 };
-  ui.sheet = { mode: 'position', title: entry.title, entryId: entry.id, s: next.s, e: next.e };
+  ui.sheet = { mode: 'position', title: entry.title, entryId: entry.id, s: next.s, e: next.e, minutes: p.nextMinutes || 0 };
   renderSheet();
 }
 
@@ -599,6 +615,9 @@ function renderSheet() {
     body = `<h3 class="sheet-title">Où en es-tu ?</h3>
       <p class="muted">Indique le prochain épisode que tu vas regarder.</p>
       ${positionPicker(sh)}
+      <div class="sheet-sec"><h4>Déjà regardé de cet épisode : <b data-out="posmin">${sh.minutes}</b> min</h4>
+        <input class="range" type="range" min="0" max="${t.runtime || 60}" value="${sh.minutes}" data-input="posMinutes"
+          style="--v:${(sh.minutes / (t.runtime || 60)) * 100}%"></div>
       <button class="btn primary block" data-action="savePosition">Enregistrer</button>`;
   } else if (sh.existing) {
     body = `${sheetHead(t)}<p class="muted">Ce titre est déjà dans ta bibliothèque.</p>
@@ -725,9 +744,9 @@ const actions = {
   },
   savePosition() {
     const sh = ui.sheet;
-    S.setPosition(sh.entryId, { s: sh.s, e: sh.e });
+    S.setPosition(sh.entryId, { s: sh.s, e: sh.e }, sh.minutes);
     closeSheet();
-    toast(`Position mise à jour · prochain <b>${epLabel(sh)}</b>`);
+    toast(`Position mise à jour · ${sh.minutes ? `reprise de <b>${epLabel(sh)}</b> à ${sh.minutes} min` : `prochain <b>${epLabel(sh)}</b>`}`);
   },
   export() {
     const blob = new Blob([S.exportData()], { type: 'application/json' });
@@ -818,7 +837,12 @@ document.addEventListener('input', (ev) => {
     return;
   }
   const kind = el.dataset.input;
-  if (kind === 'minutes' || kind === 'sheetMinutes') el.style.setProperty('--v', `${(el.value / el.max) * 100}%`);
+  if (kind === 'epMinutes') $('[data-out="epmin"]').textContent = `${el.value} min`;
+  if (kind === 'posMinutes') {
+    ui.sheet.minutes = +el.value;
+    $('[data-out="posmin"]').textContent = el.value;
+  }
+  if (kind === 'minutes' || kind === 'sheetMinutes' || kind === 'epMinutes' || kind === 'posMinutes') el.style.setProperty('--v', `${(el.value / el.max) * 100}%`);
   if (kind === 'sheetMinutes') {
     ui.sheet.minutes = +el.value;
     $('[data-out="minutes"]').textContent = el.value;
@@ -829,6 +853,7 @@ document.addEventListener('change', (ev) => {
   const el = ev.target;
   const kind = el.dataset.input;
   if (kind === 'minutes') S.setMinutes(el.dataset.id, +el.value);
+  if (kind === 'epMinutes') S.setEpisodeMinutes(el.dataset.id, +el.value);
   if (kind === 'region') {
     S.updateSettings({ region: el.value });
     refreshLibrary(true);

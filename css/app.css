@@ -375,6 +375,11 @@ p { margin: 0; }
 .big { font: 800 34px/1.05 var(--display); letter-spacing: -0.03em; }
 .epname { display: block; margin-top: 4px; color: var(--muted); font-size: 14px; }
 .pc-meta { display: flex; justify-content: space-between; margin-top: 10px; color: var(--muted); font-size: 13px; font-weight: 500; }
+.ep-minutes { margin-top: 16px; padding: 14px 14px 8px; border-radius: 14px; background: var(--bg-2); border: 1px solid var(--line); }
+.ep-minutes-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 14px; }
+.ep-minutes-head > span:first-child { display: flex; align-items: center; gap: 6px; }
+.ep-minutes-head .ic { width: 16px; height: 16px; color: var(--pink); }
+.ep-minutes-head .muted { font-size: 12px; }
 .link { margin-top: 12px; color: #d8b4fe; font-size: 14px; font-weight: 600; text-decoration: underline; text-decoration-color: rgba(216, 180, 254, 0.35); text-underline-offset: 3px; }
 .link:hover { color: var(--text); }
 .platform-now .pchip { padding: 6px 12px 6px 10px; font-size: 14px; }
