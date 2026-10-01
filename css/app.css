@@ -24,6 +24,8 @@
 }
 
 * { box-sizing: border-box; }
+/* Un élément masqué reste masqué, quel que soit son affichage (évite les calques invisibles qui bloquent les touchers). */
+[hidden] { display: none !important; }
 html { -webkit-text-size-adjust: 100%; }
 body {
   margin: 0;
@@ -633,6 +635,7 @@ p { margin: 0; }
   position: fixed; inset: 0; z-index: 55; display: flex; flex-direction: column;
   background: var(--bg); opacity: 0; transform: translateY(8px); transition: opacity 0.18s, transform 0.18s;
 }
+.finder:not(.open) { pointer-events: none; }
 .finder.open { opacity: 1; transform: none; }
 .finder-bar {
   display: flex; align-items: center; gap: 10px; flex: none;
