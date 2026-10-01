@@ -239,12 +239,22 @@ export function setProviders(id, providers) {
 }
 
 // Alerte quand la série n'est plus disponible sur la plateforme où l'utilisateur la regarde.
-export function platformAlert(entry) {
+// Avec des abonnements renseignés, seules les séries regardées sur une de ces plateformes déclenchent l'alerte,
+// et les plateformes auxquelles l'utilisateur est abonné sont proposées en premier.
+export function platformAlert(entry, subs = []) {
   const list = entry.providers;
   if (!list || !list.length || entry.status === 'completed' || entry.platform === 'other') return null;
   if (list.includes(entry.platform)) return null;
+  if (subs.length && !subs.includes(entry.platform)) return null;
   if (entry.alertAck === list.join(',')) return null;
-  return list;
+  return [...list].sort((a, b) => subs.includes(b) - subs.includes(a));
+}
+
+// Le titre peut-il être regardé avec les abonnements de l'utilisateur ?
+export function availableForMe(entry, subs) {
+  if (!subs.length) return true;
+  if (entry.providers?.length) return entry.providers.some((p) => subs.includes(p));
+  return subs.includes(entry.platform);
 }
 
 export function ackAlert(id) {

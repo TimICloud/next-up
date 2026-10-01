@@ -190,8 +190,13 @@ export async function details(title) {
     t.ended = ['Ended', 'Canceled'].includes(d.status);
     const last = d.last_episode_to_air;
     t.lastAired = last ? { s: last.season_number, e: last.episode_number } : null;
+    t.lastAirDate = last?.air_date || null;
+    const next = d.next_episode_to_air;
+    t.nextAir = next ? { s: next.season_number, e: next.episode_number, date: next.air_date || null, name: next.name || '' } : null;
+    t.returning = d.status === 'Returning Series' || d.status === 'In Production' || d.status === 'Planned';
   } else {
     t.runtime = d.runtime || null;
+    t.releaseDate = d.release_date || null;
   }
   return t;
 }

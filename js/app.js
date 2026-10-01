@@ -9,6 +9,61 @@ const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
 const epLabel = (ep) => `S${ep.s} · É${ep.e}`;
 const plural = (n, one, many) => `${n} ${n > 1 ? many : one}`;
 
+// Abonnements : dans le compte quand on est connecté (tous les appareils), sinon sur l'appareil.
+const subscriptions = () => S.settings().subscriptions ?? [];
+
+// À la connexion : on reprend les abonnements du compte, ou on y enregistre ceux de l'appareil.
+function syncSubscriptions() {
+  const fromAccount = Auth.user()?.user_metadata?.subscriptions;
+  if (fromAccount) S.updateSettings({ subscriptions: fromAccount });
+  else if (subscriptions().length) Auth.updateMeta({ subscriptions: subscriptions() }).catch(() => {});
+}
+
+// ——— Dates de sortie ———
+const DAY_MS = 86400000;
+const startOfDay = (d) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
+const parseDay = (s) => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
+
+function relDay(days, date) {
+  if (days === 0) return 'aujourd’hui';
+  if (days === 1) return 'demain';
+  if (days < 7) return date.toLocaleDateString('fr-BE', { weekday: 'long' });
+  return `dans ${days} jours`;
+}
+
+// Prochaines sorties des titres suivis (données TMDB rafraîchies en arrière-plan).
+function upcoming() {
+  const today = startOfDay(Date.now());
+  const items = [];
+  const fresh = [];
+  const tbd = [];
+  for (const e of S.entries()) {
+    const t = e.title;
+    if (t.source !== 'tmdb') continue;
+    if (t.type === 'tv') {
+      if (t.nextAir?.date) {
+        const date = parseDay(t.nextAir.date);
+        const days = Math.round((date - today) / DAY_MS);
+        if (days >= 0) items.push({ e, date, days, label: epLabel(t.nextAir), name: t.nextAir.name, premiere: t.nextAir.e === 1 });
+      } else if (t.returning && !t.ended) {
+        tbd.push(e);
+      }
+      // Nouveaux épisodes sortis ces 14 derniers jours et pas encore vus.
+      const p = S.progress(e);
+      if (t.lastAirDate && t.lastAired && p.next && p.nextAired && e.status !== 'planned' && p.next.s === t.lastAired.s) {
+        const days = Math.round((today - parseDay(t.lastAirDate)) / DAY_MS);
+        if (days >= 0 && days <= 14) fresh.push({ e, days, label: epLabel(p.next) });
+      }
+    } else if (t.releaseDate && e.status !== 'completed') {
+      const date = parseDay(t.releaseDate);
+      const days = Math.round((date - today) / DAY_MS);
+      if (days >= 0) items.push({ e, date, days, label: 'Sortie du film', movie: true });
+    }
+  }
+  items.sort((a, b) => a.date - b.date);
+  return { items, fresh, tbd };
+}
+
 const STATUS = {
   watching: 'En cours',
   paused: 'En pause',
@@ -98,7 +153,9 @@ function viewHome() {
   }
 
   const withP = list.map((e) => ({ e, p: S.progress(e) }));
-  const alerts = list.map((e) => ({ e, to: S.platformAlert(e) })).filter((a) => a.to);
+  const subs = subscriptions();
+  const alerts = list.map((e) => ({ e, to: S.platformAlert(e, subs) })).filter((a) => a.to);
+  const soon = upcoming().items.filter((x) => x.days <= 7);
   const resume = withP
     .filter(({ e, p }) => e.status === 'watching' && (p.movie ? !p.done : p.next && p.nextAired))
     .sort((a, b) => (b.e.lastWatchedAt || 0) - (a.e.lastWatchedAt || 0));
@@ -113,6 +170,15 @@ function viewHome() {
 
     ${Auth.enabled && !Auth.user() ? accountBanner() : ''}
     ${alerts.map(({ e, to }) => alertCard(e, to)).join('')}
+    ${!subs.length ? `<a class="subs-banner" href="#/profile/abonnements">
+      <span class="subs-icons">${['netflix', 'prime', 'disney'].map((id) => `<i style="--pc:${platform(id).color}"></i>`).join('')}</span>
+      <span><b>Indique tes abonnements</b><small>Pour savoir ce que tu peux regarder et être prévenu au bon moment.</small></span>
+      ${icon('back', 'flip')}</a>` : ''}
+    ${soon.length ? `<a class="soon-card" href="#/upcoming">
+      <span class="soon-icon">${icon('calendar')}</span>
+      <span><small>Bientôt</small><span class="soon-line"><b>${esc(soon[0].e.title.name)}</b> · ${soon[0].label} · <em>${relDay(soon[0].days, soon[0].date)}</em></span>
+        ${soon.length > 1 ? `<small>+ ${plural(soon.length - 1, 'autre sortie', 'autres sorties')} cette semaine</small>` : ''}</span>
+      ${icon('back', 'flip')}</a>` : ''}
 
     <section class="block">
       <div class="block-head"><h2>Continuer</h2><span class="count">${resume.length}</span></div>
@@ -144,7 +210,7 @@ function resumeCard(e, p) {
     <div class="rcard-bg">${backdrop(t)}</div>
     ${poster(t, 'rcard-poster')}
     <div class="rcard-body">
-      <div class="rcard-top">${chip(e.platform)}${t.type === 'movie' ? '<span class="tag">Film</span>' : ''}</div>
+      <div class="rcard-top">${chip(e.platform)}${t.type === 'movie' ? '<span class="tag">Film</span>' : ''}${S.availableForMe(e, subscriptions()) ? '' : '<span class="tag warn">Hors abonnements</span>'}</div>
       <h3>${esc(t.name)}</h3>
       <p class="next">${nextLine(e, p)}</p>
       ${bar(p.pct)}
@@ -173,7 +239,7 @@ function alertCard(e, to) {
     <div class="alert-icon">${icon('swap')}</div>
     <div class="alert-body">
       <p><b>${esc(e.title.name)}</b> n’est plus sur ${esc(from)}.</p>
-      <p class="muted">Disponible sur ${to.map((pid) => esc(platform(pid).name)).join(', ')}. Ta progression est conservée.</p>
+      <p class="muted">Disponible sur ${to.map((pid) => esc(platform(pid).name)).join(', ')}${subscriptions().includes(target) ? ', inclus dans tes abonnements' : subscriptions().length ? ' (pas dans tes abonnements)' : ''}. Ta progression est conservée.</p>
       <div class="alert-actions">
         <button class="btn small primary" data-action="switchPlatform" data-id="${esc(e.id)}" data-p="${target}">Passer sur ${esc(platform(target).name)}</button>
         <button class="btn small ghost" data-action="ackAlert" data-id="${esc(e.id)}">Ignorer</button>
@@ -189,20 +255,31 @@ const LIB_FILTERS = [
   ['completed', 'Terminés'],
   ['movie', 'Films'],
   ['tv', 'Séries'],
+  ['mine', 'Sur mes abonnements'],
 ];
 
 function viewLibrary() {
   const f = ui.libFilter;
+  const subs = subscriptions();
+  const match = (e) => {
+    if (f === 'all') return true;
+    if (f === 'movie' || f === 'tv') return e.title.type === f;
+    if (f === 'watching') return e.status === 'watching' || e.status === 'paused';
+    if (f === 'mine') return e.status !== 'completed' && S.availableForMe(e, subs);
+    return e.status === f;
+  };
   const list = S.entries()
-    .filter((e) => f === 'all' || (f === 'movie' || f === 'tv' ? e.title.type === f : f === 'watching' ? e.status === 'watching' || e.status === 'paused' : e.status === f))
+    .filter(match)
     .sort((a, b) => (b.lastWatchedAt || b.addedAt) - (a.lastWatchedAt || a.addedAt));
 
   return `<header class="page-head compact"><h1>Bibliothèque</h1>
       <p class="muted">${plural(S.entries().length, 'titre', 'titres')}</p></header>
     <div class="filters">${LIB_FILTERS.map(([k, label]) =>
       `<button class="fchip ${f === k ? 'on' : ''}" data-action="libFilter" data-f="${k}">${label}</button>`).join('')}</div>
+    ${f === 'mine' && !subs.length ? `<div class="empty small"><p>Indique d’abord tes abonnements.</p><a class="btn" href="#/profile/abonnements">Choisir mes abonnements</a></div>`
+      : f === 'mine' ? `<p class="muted block-sub">À voir ou en cours, et disponible sur ${subs.map((id) => platform(id).name).join(', ')}.</p>` : ''}
     ${list.length ? `<div class="grid">${list.map(tile).join('')}</div>`
-      : `<div class="empty small"><p>Rien ici pour l’instant.</p><a class="btn" href="#/add">${icon('plus')} Ajouter</a></div>`}`;
+      : f === 'mine' && !subs.length ? '' : `<div class="empty small"><p>Rien ici pour l’instant.</p><a class="btn" href="#/add">${icon('plus')} Ajouter</a></div>`}`;
 }
 
 function tile(e) {
@@ -217,6 +294,64 @@ function tile(e) {
     <b class="tile-name">${esc(e.title.name)}</b>
     <span class="tile-sub"><i style="--pc:${platform(e.platform).color}"></i>${p.movie ? STATUS[e.status] : p.next && e.status !== 'planned' ? epLabel(p.next) : STATUS[e.status]}</span>
   </div>`;
+}
+
+function upRow({ e, date, days, label, name, premiere }) {
+  const t = e.title;
+  return `<a class="up-row" href="#/title/${encodeURIComponent(e.id)}">
+    ${poster(t, 'up-poster')}
+    <span class="up-info">
+      <b>${esc(t.name)}</b>
+      <span>${label}${name && !/^(Épisode|Episode) \d+$/i.test(name) ? ` · ${esc(name)}` : ''}</span>
+      <span class="up-tags">${chip(e.platform)}${premiere ? '<span class="tag hot">Nouvelle saison</span>' : ''}</span>
+    </span>
+    <span class="up-when"><b>${relDay(days, date)}</b><small>${date.toLocaleDateString('fr-BE', { day: 'numeric', month: 'short' })}</small></span>
+  </a>`;
+}
+
+function viewUpcoming() {
+  const head = `<header class="page-head compact"><h1>À venir</h1>${ui.upcomingLoading ? '<span class="mini-spinner" aria-label="Mise à jour"></span>' : ''}</header>`;
+  if (!C.live()) {
+    return `${head}<div class="empty">
+      <div class="empty-art">${icon('calendar')}</div>
+      <h2>Les prochaines sorties de tes séries</h2>
+      <p>${Auth.enabled ? 'Connecte-toi pour savoir quand sortent les prochains épisodes, saisons et films de ta bibliothèque.' : 'Disponible avec un compte Next Up.'}</p>
+      ${Auth.enabled ? '<a class="btn primary" href="#/account/login">Se connecter</a>' : ''}
+    </div>`;
+  }
+  const { items, fresh, tbd } = upcoming();
+  if (!items.length && !fresh.length && !tbd.length) {
+    return `${head}<div class="empty">
+      <div class="empty-art">${icon('calendar')}</div>
+      <h2>${ui.upcomingLoading ? 'Recherche des prochaines sorties…' : 'Rien d’annoncé pour l’instant'}</h2>
+      <p>Les prochains épisodes et saisons des séries de ta bibliothèque apparaîtront ici.</p>
+    </div>`;
+  }
+  const groups = [
+    ['Aujourd’hui', items.filter((x) => x.days === 0)],
+    ['Demain', items.filter((x) => x.days === 1)],
+    ['Cette semaine', items.filter((x) => x.days >= 2 && x.days < 7)],
+    ['Plus tard', items.filter((x) => x.days >= 7)],
+  ].filter(([, list]) => list.length);
+
+  return `${head}
+    ${fresh.length ? `<section class="block first">
+      <div class="block-head"><h2>Nouveaux épisodes</h2><span class="count">${fresh.length}</span></div>
+      <div class="up-list">${fresh.map(({ e, days, label }) => `<a class="up-row fresh" href="#/title/${encodeURIComponent(e.id)}">
+        ${poster(e.title, 'up-poster')}
+        <span class="up-info"><b>${esc(e.title.name)}</b><span>${label} est disponible</span><span class="up-tags">${chip(e.platform)}</span></span>
+        <span class="up-when"><b>${days === 0 ? 'Sorti aujourd’hui' : days === 1 ? 'Sorti hier' : `Il y a ${days} j`}</b></span>
+      </a>`).join('')}</div>
+    </section>` : ''}
+    ${groups.map(([title, list], i) => `<section class="block ${i === 0 && !fresh.length ? 'first' : ''}">
+      <div class="block-head"><h2>${title}</h2><span class="count">${list.length}</span></div>
+      <div class="up-list">${list.map(upRow).join('')}</div>
+    </section>`).join('')}
+    ${tbd.length ? `<section class="block">
+      <div class="block-head"><h2>Date à confirmer</h2><span class="count">${tbd.length}</span></div>
+      <p class="muted block-sub">La série continue, mais la date de la suite n’est pas encore connue.</p>
+      <div class="row-scroll">${tbd.map(miniPoster).join('')}</div>
+    </section>` : ''}`;
 }
 
 function viewAdd() {
@@ -347,7 +482,9 @@ function platformCard(e) {
       `<li><i style="--pc:${platform(h.platform).color}"></i><b>${esc(platform(h.platform).name)}</b><span>depuis le ${date(h.at)}</span></li>`).join('')}</ol>` : ''}
     ${e.title.source === 'custom' ? '' : `<div class="avail"><span class="label">Disponible en ${esc(S.settings().region)}${e.title.source === 'demo' ? ' (démo)' : ''}</span>
       ${avail == null ? `<p class="muted">${C.live() ? 'Recherche…' : 'Disponible avec un compte Next Up.'}</p>`
-        : avail.length ? `<div class="chips">${avail.map(chip).join('')}</div>` : '<p class="muted">Aucune plateforme d’abonnement trouvée.</p>'}
+        : avail.length ? `<div class="chips">${avail.map((id) => subscriptions().includes(id) ? chip(id).replace('</span>', ` ${icon('check', 'mine')}</span>`) : chip(id)).join('')}</div>
+          ${subscriptions().length ? `<p class="hint">${avail.some((id) => subscriptions().includes(id)) ? `${icon('check')} Inclus dans tes abonnements` : 'Pas disponible sur tes abonnements.'}</p>` : ''}`
+          : '<p class="muted">Aucune plateforme d’abonnement trouvée.</p>'}
     </div>`}
   </section>`;
 }
@@ -399,6 +536,7 @@ function viewProfile() {
     </div>
 
     ${accountCard()}
+    ${subsCard()}
 
     <section class="card">
       <label class="field first"><span>Pays (pour les plateformes disponibles)</span>
@@ -419,6 +557,17 @@ function viewProfile() {
       </div>
     </section>
     <p class="credit muted">Next Up utilise l’API TMDB mais n’est ni approuvé ni certifié par TMDB.</p>`;
+}
+
+function subsCard() {
+  const subs = subscriptions();
+  return `<section class="card" id="abonnements">
+    <div class="card-title">${icon('tv')}<h3>Mes abonnements</h3></div>
+    <p class="muted">Coche les plateformes auxquelles tu es abonné : l’app te montre ce que tu peux regarder et ne t’alerte que pour tes plateformes.</p>
+    <div class="pick-grid">${PLATFORMS.filter((pl) => pl.id !== 'other').map((pl) => `<button class="pick ${subs.includes(pl.id) ? 'on' : ''}"
+      style="--pc:${pl.color}" data-action="toggleSub" data-p="${pl.id}" aria-pressed="${subs.includes(pl.id)}"><i></i>${esc(pl.name)}${subs.includes(pl.id) ? icon('check', 'pick-check') : ''}</button>`).join('')}</div>
+    ${subs.length ? `<p class="hint ok">${icon('check')} ${plural(subs.length, 'abonnement', 'abonnements')}${Auth.user() ? ' · enregistré dans ton compte' : ''}</p>` : ''}
+  </section>`;
 }
 
 function accountCard() {
@@ -504,8 +653,7 @@ function viewAccount(mode) {
 function openAddSheet(title) {
   const existing = S.get(title.id);
   ui.sheet = { mode: 'add', title, platform: null, status: 'watching', s: 1, e: 1, minutes: 0, providers: title.providers || null, loading: title.source === 'tmdb', existing: Boolean(existing) };
-  if (!ui.sheet.providers?.length) ui.sheet.platform = 'netflix';
-  else ui.sheet.platform = ui.sheet.providers[0];
+  ui.sheet.platform = preferredPlatform(ui.sheet.providers);
   renderSheet();
   if (title.source === 'tmdb') {
     const s = S.settings();
@@ -513,7 +661,7 @@ function openAddSheet(title) {
       .then(([full, prov]) => {
         if (ui.sheet?.title.id !== title.id) return;
         Object.assign(ui.sheet, { title: full, providers: prov, loading: false });
-        if (prov?.length) ui.sheet.platform = prov[0];
+        if (prov?.length) ui.sheet.platform = preferredPlatform(prov);
         renderSheet();
       })
       .catch(() => {
@@ -521,6 +669,12 @@ function openAddSheet(title) {
         renderSheet();
       });
   }
+}
+
+// Plateforme proposée : disponible ET dans les abonnements, sinon disponible, sinon un abonnement.
+function preferredPlatform(providers) {
+  const subs = subscriptions();
+  return providers?.find((p) => subs.includes(p)) || providers?.[0] || subs[0] || 'netflix';
 }
 
 function openPositionSheet(entry) {
@@ -755,6 +909,12 @@ const actions = {
     a.download = `next-up-${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(a.href);
+  },
+  toggleSub({ p }) {
+    const subs = subscriptions();
+    const next = subs.includes(p) ? subs.filter((x) => x !== p) : [...subs, p];
+    S.updateSettings({ subscriptions: next });
+    if (Auth.user()) Auth.updateMeta({ subscriptions: next }).catch(() => toast('Abonnements enregistrés sur cet appareil seulement'));
   },
   manual() { openManualSheet(null); },
   editCustom({ id }) { openManualSheet(S.get(id)); },
@@ -1003,6 +1163,21 @@ async function refreshEntry(entry, force = false) {
   ui.loading.delete(entry.id);
 }
 
+// « À venir » : on rafraîchit les séries en cours de diffusion et les films pas encore vus.
+async function refreshUpcoming() {
+  if (!C.live() || ui.upcomingLoading) return;
+  const targets = S.entries().filter((e) => e.title.source === 'tmdb'
+    && (e.title.type === 'tv' ? !e.title.ended : e.status !== 'completed'));
+  const stale = (e) => !('nextAir' in e.title || 'releaseDate' in e.title) || Date.now() - (e.title.refreshedAt || 0) > 6 * 3600000;
+  const todo = targets.filter(stale);
+  if (!todo.length) return;
+  ui.upcomingLoading = true;
+  if (route().name === 'upcoming') render();
+  await Promise.all(todo.map((e) => refreshEntry(e, true)));
+  ui.upcomingLoading = false;
+  render();
+}
+
 function refreshLibrary(force = false) {
   S.entries().filter((e) => e.status !== 'completed').forEach((e) => refreshEntry(e, force));
 }
@@ -1022,10 +1197,11 @@ function render() {
   else if (r.name === 'profile') view.innerHTML = viewProfile();
   else if (r.name === 'title') view.innerHTML = viewTitle(r.arg);
   else if (r.name === 'account') view.innerHTML = viewAccount(r.arg);
+  else if (r.name === 'upcoming') view.innerHTML = viewUpcoming();
   else view.innerHTML = viewHome();
   view.dataset.route = r.name;
 
-  const TITLES = { home: '', library: 'Bibliothèque', add: 'Ajouter', profile: 'Profil', account: 'Compte' };
+  const TITLES = { home: '', library: 'Bibliothèque', add: 'Ajouter', profile: 'Profil', account: 'Compte', upcoming: 'À venir' };
   const pageTitle = r.name === 'title' ? S.get(r.arg)?.title.name : TITLES[r.name];
   document.title = pageTitle ? `${pageTitle} · Next Up` : 'Next Up';
 
@@ -1044,6 +1220,8 @@ window.addEventListener('hashchange', () => {
   ui.editName = false;
   render();
   window.scrollTo(0, 0);
+  if (r.name === 'upcoming') refreshUpcoming();
+  if (r.name === 'profile' && r.arg === 'abonnements') setTimeout(() => $('#abonnements')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 60);
   if (r.name === 'add') {
     if (!ui.results) runSearch();
     if (matchMedia('(hover: hover)').matches) $('#q')?.focus();
@@ -1071,9 +1249,11 @@ Auth.onChange(async (user) => {
   } catch {
     toast('Synchronisation impossible pour le moment');
   }
+  syncSubscriptions();
   if (route().name === 'account') location.hash = '#/';
   toast(`Bienvenue ${esc(Auth.displayName())} !`);
   refreshLibrary(true);
+  refreshUpcoming();
 });
 
 // Bordure de la barre du haut dès qu'on fait défiler.
@@ -1090,12 +1270,16 @@ async function boot() {
   render();
   try {
     await Auth.init();
-    if (Auth.user()) await S.startSync(Auth.db(), Auth.user().id);
+    if (Auth.user()) {
+      syncSubscriptions();
+      await S.startSync(Auth.db(), Auth.user().id);
+    }
   } catch {
     // Hors ligne : on continue avec la bibliothèque enregistrée sur l'appareil.
   }
   window.dispatchEvent(new HashChangeEvent('hashchange'));
   refreshLibrary();
+  refreshUpcoming();
 }
 
 boot();

@@ -58,8 +58,11 @@ export async function resetPassword(email) {
   if (error) throw frenchError(error);
 }
 
-export async function updateName(name) {
-  const { data, error } = await client.auth.updateUser({ data: { name } });
+export const updateName = (name) => updateMeta({ name });
+
+// Préférences du compte (prénom, abonnements…), retrouvées sur tous les appareils.
+export async function updateMeta(meta) {
+  const { data, error } = await client.auth.updateUser({ data: meta });
   if (error) throw frenchError(error);
   // Même utilisateur : on met à jour la session sans déclencher de resynchronisation.
   if (session) session = { ...session, user: data.user };
