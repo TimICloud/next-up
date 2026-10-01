@@ -204,15 +204,24 @@ export async function details(title) {
 // Disponibilité dans le pays choisi :
 // - included : inclus dans l'abonnement (ou gratuit / avec pub) ;
 // - paid : seulement à l'achat ou en location, en plus de l'abonnement (ex. certains titres sur Prime Video).
-export async function providers(title, settings) {
-  if (title.source !== 'tmdb') return { included: title.providers || [], paid: [] };
-  if (!live()) return null;
-  const d = await call(`/${title.type}/${title.tmdbId}/watch/providers`);
-  const r = d.results?.[settings.region];
+function parseProviders(d, region) {
+  const r = d.results?.[region];
   const ids = (list) => [...new Set((list || []).map((p) => matchProvider(p.provider_name)).filter(Boolean))];
   const included = ids([...(r?.flatrate || []), ...(r?.free || []), ...(r?.ads || [])]);
   const paid = ids([...(r?.rent || []), ...(r?.buy || [])]).filter((id) => !included.includes(id));
   return { included, paid };
+}
+
+export async function providers(title, settings) {
+  if (title.source !== 'tmdb') return { included: title.providers || [], paid: [] };
+  if (!live()) return null;
+  return parseProviders(await call(`/${title.type}/${title.tmdbId}/watch/providers`), settings.region);
+}
+
+// Disponibilité d'une saison précise : une plateforme peut inclure certaines saisons et vendre les autres.
+export async function seasonProviders(title, season, settings) {
+  if (title.source !== 'tmdb' || title.type !== 'tv' || !live()) return null;
+  return parseProviders(await call(`/tv/${title.tmdbId}/season/${season}/watch/providers`), settings.region);
 }
 
 export async function seasonEpisodes(title, season) {

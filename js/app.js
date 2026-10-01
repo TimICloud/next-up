@@ -514,6 +514,8 @@ function platformCard(e) {
         : `${avail.length ? `<p class="avail-kind">Inclus dans l’abonnement</p>
           <div class="chips">${avail.map((id) => subscriptions().includes(id) ? chip(id).replace('</span>', ` ${icon('check', 'mine')}</span>`) : chip(id)).join('')}</div>`
           : '<p class="muted">Inclus dans aucun abonnement pour l’instant.</p>'}
+          ${Object.values(e.seasonAvail || {}).some((a) => a.paid.includes(e.platform) && !a.included.includes(e.platform)) && avail.includes(e.platform)
+            ? `<p class="hint warn">Attention : sur ${esc(platform(e.platform).name)}, certaines saisons ne sont qu’à l’achat. Détail par saison dans « Épisodes ».</p>` : ''}
           ${e.paidProviders?.length ? `<p class="avail-kind">À l’achat ou en location</p>
           <div class="chips">${e.paidProviders.map((id) => chip(id).replace('</span>', ' <em class="paid">€</em></span>')).join('')}</div>` : ''}
           ${subscriptions().length ? `<p class="hint">${avail.some((id) => subscriptions().includes(id)) ? `${icon('check')} Inclus dans tes abonnements`
@@ -521,6 +523,24 @@ function platformCard(e) {
             : 'Pas inclus dans tes abonnements.'}</p>` : ''}`}
     </div>`}
   </section>`;
+}
+
+// Où regarder la saison affichée, sur la plateforme choisie et ailleurs.
+function seasonAvailLine(e, n) {
+  const st = S.seasonStatus(e, n);
+  if (!st) return e.title.source === 'tmdb' && C.live() && !e.seasonAvail ? '<p class="season-avail muted">Vérification des disponibilités par saison…</p>' : '';
+  const a = e.seasonAvail[n];
+  const pf = esc(platform(e.platform).name);
+  const elsewhere = a.included.filter((id) => id !== e.platform).map((id) => platform(id).name);
+  const also = elsewhere.length ? ` · incluse sur ${esc(elsewhere.join(', '))}` : '';
+  if (st === 'included') return `<p class="season-avail ok">${icon('check')} Saison ${n} incluse dans l’abonnement ${pf}</p>`;
+  if (st === 'paid') return `<p class="season-avail paid"><b>€</b> Saison ${n} : seulement à l’achat ou en location sur ${pf}${also}</p>`;
+  const buy = a.paid.map((id) => platform(id).name);
+  if (!a.included.length && !buy.length) {
+    const country = { BE: 'en Belgique', FR: 'en France', CH: 'en Suisse', LU: 'au Luxembourg', CA: 'au Canada' }[S.settings().region] || 'dans ton pays';
+    return `<p class="season-avail none">Saison ${n} pas encore disponible ${country}, ni en abonnement ni à l’achat</p>`;
+  }
+  return `<p class="season-avail none">Saison ${n} pas disponible sur ${pf}${also}${buy.length ? ` · à l’achat sur ${esc(buy.join(', '))}` : ''}</p>`;
 }
 
 function episodesSection(e, p) {
@@ -536,9 +556,12 @@ function episodesSection(e, p) {
     <div class="block-head"><h2>Épisodes</h2></div>
     <div class="season-tabs">${seasons.map((s) => {
       const pct = seenIn(s) / s.count;
-      return `<button class="stab ${s.n === season.n ? 'on' : ''} ${pct === 1 ? 'full' : ''}" data-action="season" data-id="${esc(e.id)}" data-s="${s.n}">
-        S${s.n}<span class="stab-bar"><span style="width:${pct * 100}%"></span></span></button>`;
+      const st = S.seasonStatus(e, s.n);
+      const flag = st === 'paid' ? '<i class="stab-flag paid" title="À l’achat">€</i>' : st === 'none' ? '<i class="stab-flag none" title="Pas sur cette plateforme">—</i>' : '';
+      return `<button class="stab ${s.n === season.n ? 'on' : ''} ${pct === 1 ? 'full' : ''} ${st ? `st-${st}` : ''}" data-action="season" data-id="${esc(e.id)}" data-s="${s.n}">
+        <span class="stab-n">S${s.n}${flag}</span><span class="stab-bar"><span style="width:${pct * 100}%"></span></span></button>`;
     }).join('')}</div>
+    ${seasonAvailLine(e, season.n)}
     <div class="season-head">
       <span class="muted">Saison ${season.n} · ${seenIn(season)} / ${season.count} vus</span>
       <button class="link" data-action="seasonAll" data-id="${esc(e.id)}" data-s="${season.n}" data-v="${allSeen ? 0 : 1}">${allSeen ? 'Tout décocher' : 'Tout marquer vu'}</button>
@@ -1355,6 +1378,26 @@ async function loadEpisodeNames(entry, season) {
   ui.loading.delete(key);
 }
 
+// Toutes les saisons à l'ouverture de la fiche (au plus toutes les 12 h).
+async function loadSeasonAvail(entry, onlySeason = null) {
+  const t = entry.title;
+  if (t.source !== 'tmdb' || t.type !== 'tv' || !C.live() || !t.seasons?.length) return;
+  const key = `avail|${entry.id}|${onlySeason ?? 'all'}`;
+  if (ui.loading.has(key)) return;
+  if (onlySeason == null && entry.seasonAvailAt && Date.now() - entry.seasonAvailAt < 12 * 3600000
+    && t.seasons.every((s) => entry.seasonAvail?.[s.n])) return;
+  if (onlySeason != null && entry.seasonAvail?.[onlySeason] && Date.now() - (entry.seasonAvailAt || 0) < 12 * 3600000) return;
+  ui.loading.add(key);
+  try {
+    const s = S.settings();
+    const list = onlySeason != null ? [onlySeason] : t.seasons.map((x) => x.n);
+    const results = await Promise.all(list.map((n) => C.seasonProviders(t, n, s).then((a) => [n, a]).catch(() => [n, null])));
+    S.setSeasonAvail(entry.id, Object.fromEntries(results.filter(([, a]) => a)));
+  } finally {
+    ui.loading.delete(key);
+  }
+}
+
 async function refreshEntry(entry, force = false) {
   if (entry.title.source !== 'tmdb' || ui.loading.has(entry.id)) return;
   const stale = !entry.title.refreshedAt || Date.now() - entry.title.refreshedAt > 12 * 3600000;
@@ -1364,6 +1407,8 @@ async function refreshEntry(entry, force = false) {
     const s = S.settings();
     const [title, avail] = await Promise.all([C.details(entry.title, s), C.providers(entry.title, s)]);
     if (avail) S.setProviders(entry.id, avail.included, avail.paid);
+    const { next } = S.progress(entry);
+    if (next) loadSeasonAvail(S.get(entry.id), next.s);
     S.updateTitle(entry.id, title);
   } catch { /* hors ligne ou clé absente : on garde les données en cache */ }
   ui.loading.delete(entry.id);
@@ -1436,6 +1481,7 @@ window.addEventListener('hashchange', () => {
     const e = S.get(r.arg);
     if (e) {
       refreshEntry(e);
+      loadSeasonAvail(e);
       const p = S.progress(e);
       if (!p.movie) loadEpisodeNames(e, ui.season[e.id] ?? p.next?.s ?? 1);
     }

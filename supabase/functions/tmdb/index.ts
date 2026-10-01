@@ -7,7 +7,7 @@ const TMDB_TOKEN = (Deno.env.get('TMDB_TOKEN') ?? Deno.env.get('TMDB-token') ?? 
 const supabase = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_ANON_KEY') ?? '');
 
 // Uniquement les appels dont l'app a besoin (+ la recherche intelligente de Next Up).
-const ALLOWED = /^\/(configuration|search\/multi|trending\/all\/week|(tv|movie)\/\d+(\/watch\/providers)?|tv\/\d+\/season\/\d+|nextup\/search)$/;
+const ALLOWED = /^\/(configuration|search\/multi|trending\/all\/week|(tv|movie)\/\d+(\/watch\/providers)?|tv\/\d+\/season\/\d+(\/watch\/providers)?|nextup\/search)$/;
 
 const cors = {
   'Access-Control-Allow-Origin': '*',

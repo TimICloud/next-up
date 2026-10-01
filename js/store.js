@@ -266,14 +266,51 @@ export function platformAlert(entry, subs = []) {
   };
 }
 
-// Sur la plateforme choisie, le titre n'est pas inclus dans l'abonnement : seulement à l'achat ou en location.
-export const purchaseOnly = (entry) =>
-  Boolean(entry.paidProviders?.includes(entry.platform) && !entry.providers?.includes(entry.platform));
+// Disponibilité saison par saison (données TMDB, propres à cet appareil).
+export function setSeasonAvail(id, seasons) {
+  const entry = state.entries[id];
+  if (!entry) return;
+  entry.seasonAvail = { ...(entry.seasonAvail || {}), ...seasons };
+  entry.seasonAvailAt = Date.now();
+  persist();
+  listeners.forEach((fn) => fn());
+}
+
+// Statut d'une saison sur la plateforme choisie : 'included', 'paid', 'none' ou null (inconnu).
+export function seasonStatus(entry, n) {
+  const a = entry.seasonAvail?.[n];
+  if (!a) return null;
+  // Aucune offre pour cette saison alors que d'autres saisons en ont : pas (encore) disponible dans le pays.
+  if (!a.included.length && !a.paid.length) {
+    return Object.values(entry.seasonAvail).some((x) => x.included.length || x.paid.length) ? 'none' : null;
+  }
+  if (a.included.includes(entry.platform)) return 'included';
+  if (a.paid.includes(entry.platform)) return 'paid';
+  return 'none';
+}
+
+// La saison en cours (celle du prochain épisode) si on la connaît, sinon la série entière.
+function currentAvail(entry) {
+  if (entry.title.type === 'tv') {
+    const { next } = progress(entry);
+    const a = next && entry.seasonAvail?.[next.s];
+    if (a && (a.included.length || a.paid.length)) return a;
+  }
+  return { included: entry.providers || [], paid: entry.paidProviders || [] };
+}
+
+// Sur la plateforme choisie, le titre (ou la saison en cours) n'est pas inclus dans l'abonnement :
+// seulement à l'achat ou en location.
+export function purchaseOnly(entry) {
+  const a = currentAvail(entry);
+  return a.paid.includes(entry.platform) && !a.included.includes(entry.platform);
+}
 
 // Le titre peut-il être regardé avec les abonnements de l'utilisateur ?
 export function availableForMe(entry, subs) {
   if (!subs.length) return true;
-  if (entry.providers?.length) return entry.providers.some((p) => subs.includes(p));
+  const a = currentAvail(entry);
+  if (a.included.length || a.paid.length || entry.providers) return a.included.some((p) => subs.includes(p));
   return subs.includes(entry.platform);
 }
 

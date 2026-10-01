@@ -408,6 +408,17 @@ p { margin: 0; }
   font-weight: 700; font-size: 14px;
 }
 .stab.on { color: var(--text); border-color: var(--violet); background: var(--surface-2); }
+.stab-n { display: flex; align-items: center; justify-content: center; gap: 3px; }
+.stab-flag { font-style: normal; font-size: 11px; font-weight: 800; line-height: 1; }
+.stab-flag.paid { color: var(--warn); }
+.stab-flag.none { color: var(--muted); }
+.stab.st-none { opacity: 0.6; }
+.season-avail { display: flex; align-items: center; gap: 6px; margin: 0 0 10px; padding: 9px 12px; border-radius: 12px; font-size: 13px; background: var(--surface); border: 1px solid var(--line); }
+.season-avail .ic { width: 15px; height: 15px; flex: none; }
+.season-avail.ok { color: var(--ok); }
+.season-avail.paid { color: var(--warn); border-color: rgba(251, 191, 36, 0.3); background: rgba(251, 191, 36, 0.06); }
+.season-avail.none { color: var(--muted); }
+.season-avail.muted { border-style: dashed; }
 .stab-bar { display: block; height: 3px; border-radius: 9px; background: rgba(255, 255, 255, 0.1); overflow: hidden; }
 .stab-bar span { display: block; height: 100%; background: var(--grad); }
 .stab.full .stab-bar span { background: var(--ok); }
