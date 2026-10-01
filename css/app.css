@@ -334,6 +334,8 @@ p { margin: 0; }
 .search:focus-within { border-color: var(--violet); box-shadow: 0 0 0 4px rgba(168, 85, 247, 0.18); }
 .search .ic { color: var(--muted); }
 .search input { flex: 1; min-width: 0; height: 54px; border: 0; outline: 0; background: none; font-size: 17px; }
+#results { transition: opacity 0.15s; }
+#results.loading { opacity: 0.55; }
 .search input::placeholder { color: #6b6890; }
 
 /* ——— Fiche titre ——— */

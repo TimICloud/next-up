@@ -4,6 +4,7 @@
 //   (qui détient la clé TMDB ; l'app ne la voit jamais).
 import { matchProvider } from './platforms.js';
 import * as Auth from './auth.js';
+import { norm, similarity } from './fuzzy.js';
 
 const IMG = 'https://image.tmdb.org/t/p/';
 
@@ -108,7 +109,6 @@ export const demoById = Object.fromEntries(DEMO.map((t) => [t.id, t]));
 // Adresse de l'affiche d'un titre, quelle que soit sa source.
 export const posterSrc = (t, size = 'w342') => t.posterUrl || (t.poster ? img(t.poster, size) : null);
 
-const norm = (s) => (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
 // Couleurs d'affiche générées pour les titres sans image.
 export function paletteFor(name) {
@@ -120,12 +120,12 @@ export function paletteFor(name) {
 // Catalogue complet disponible : comptes activés et utilisateur connecté.
 export const live = () => Auth.enabled && Boolean(Auth.user());
 
-async function call(path, params = {}) {
+async function call(path, params = {}, signal) {
   const url = new URL(Auth.functionUrl('tmdb'));
   url.searchParams.set('path', path);
   url.searchParams.set('language', 'fr-FR');
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
-  const res = await fetch(url, { headers: { Authorization: `Bearer ${Auth.token()}`, apikey: Auth.anonKey } });
+  const res = await fetch(url, { signal, headers: { Authorization: `Bearer ${Auth.token()}`, apikey: Auth.anonKey } });
   if (!res.ok) throw new Error(`TMDB ${res.status}`);
   return res.json();
 }
@@ -140,14 +140,34 @@ const fromTmdb = (r, type = r.media_type) => ({
   overview: r.overview || '',
 });
 
-export async function search(query, settings) {
+// Recherches déjà faites pendant la session : réponse instantanée.
+const searchCache = new Map();
+
+export async function search(query, settings, signal) {
+  const q = norm(query);
   if (!live()) {
-    const q = norm(query);
-    return DEMO.filter((t) => norm(t.name).includes(q) || norm(t.original).includes(q));
+    return DEMO
+      .map((t) => ({ t, s: Math.max(similarity(q, norm(t.name)), similarity(q, norm(t.original))) }))
+      .filter((x) => x.s >= 0.5)
+      .sort((a, b) => b.s - a.s)
+      .map((x) => x.t);
   }
-  const d = await call('/search/multi', { query, include_adult: 'false', region: settings.region });
-  return d.results.filter((r) => r.media_type === 'tv' || r.media_type === 'movie').slice(0, 24).map((r) => fromTmdb(r));
+  const key = `${settings.region}|${q}`;
+  if (searchCache.has(key)) return searchCache.get(key);
+  // Recherche tolérante aux fautes, faite par le serveur Next Up.
+  let d;
+  try {
+    d = await call('/nextup/search', { query, region: settings.region }, signal);
+  } catch (e) {
+    if (e.name === 'AbortError') throw e;
+    d = await call('/search/multi', { query, include_adult: 'false', region: settings.region }, signal);
+  }
+  const results = d.results.filter((r) => r.media_type === 'tv' || r.media_type === 'movie').slice(0, 24).map((r) => fromTmdb(r));
+  searchCache.set(key, results);
+  return results;
 }
+
+export const cachedSearch = (query, settings) => searchCache.get(`${settings.region}|${norm(query)}`);
 
 export async function suggestions() {
   if (!live()) return DEMO;

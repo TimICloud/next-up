@@ -933,25 +933,46 @@ document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape' && ui.she
 
 let searchTimer;
 let searchSeq = 0;
+let searchAbort = null;
+
+function showResults(res) {
+  ui.results = res;
+  ui.resultsById = Object.fromEntries(res.map((t) => [t.id, t]));
+  const box = $('#results');
+  if (box) {
+    box.innerHTML = resultsHTML();
+    box.classList.remove('loading');
+  }
+}
+
 function runSearch() {
   clearTimeout(searchTimer);
+  const q = ui.query.trim();
+  const s = S.settings();
+  // Déjà cherché : affichage immédiat, sans attendre.
+  const cached = q && C.cachedSearch(q, s);
+  if (cached) {
+    searchAbort?.abort();
+    ui.searchError = null;
+    showResults(cached);
+    return;
+  }
+  // Les anciens résultats restent visibles (atténués) pendant la recherche.
+  $('#results')?.classList.toggle('loading', Boolean(ui.results));
   searchTimer = setTimeout(async () => {
     const seq = ++searchSeq;
-    const q = ui.query.trim();
-    const s = S.settings();
+    searchAbort?.abort();
+    searchAbort = new AbortController();
     ui.searchError = null;
     try {
-      const res = q ? await C.search(q, s) : await C.suggestions(s);
-      if (seq !== searchSeq) return;
-      ui.results = res;
-      ui.resultsById = Object.fromEntries(res.map((t) => [t.id, t]));
-    } catch {
-      if (seq !== searchSeq) return;
+      const res = q ? await C.search(q, s, searchAbort.signal) : await C.suggestions(s);
+      if (seq === searchSeq) showResults(res);
+    } catch (e) {
+      if (e.name === 'AbortError' || seq !== searchSeq) return;
       ui.searchError = 'La recherche a échoué. Réessaie dans un instant.';
+      showResults([]);
     }
-    const box = $('#results');
-    if (box) box.innerHTML = resultsHTML();
-  }, ui.query ? 220 : 0);
+  }, q ? 150 : 0);
 }
 
 // ——— Données TMDB en arrière-plan ———
