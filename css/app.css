@@ -404,7 +404,9 @@ p { margin: 0; }
 .ep-minutes-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 14px; }
 .ep-minutes-head > span:first-child { display: flex; align-items: center; gap: 6px; }
 .ep-minutes-head .ic { width: 16px; height: 16px; color: var(--pink); }
-.ep-minutes-head .muted { font-size: 12px; }
+.ep-minutes-head .left, .epname .left, .sheet-sec .left { color: #f0abfc; font-weight: 700; }
+.ep-minutes-head .left { font-size: 13px; }
+.ep-minutes-sub { margin-top: 2px; color: var(--muted); font-size: 12px; }
 .link { margin-top: 12px; color: #d8b4fe; font-size: 14px; font-weight: 600; text-decoration: underline; text-decoration-color: rgba(216, 180, 254, 0.35); text-underline-offset: 3px; }
 .link:hover { color: var(--text); }
 .platform-now .pchip { padding: 6px 12px 6px 10px; font-size: 13px; }

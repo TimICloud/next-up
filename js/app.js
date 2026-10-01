@@ -131,14 +131,19 @@ function plusButton(entry, p, size = '') {
     aria-label="Marquer ${p.next ? epLabel(p.next) : ''} comme vu"><span>+1</span></button>`;
 }
 
+// 95 → « 1 h 35 », 19 → « 19 min ».
+const fmtDur = (m) => (m >= 60 ? `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')}` : `${m} min`);
+const leftText = (watched, runtime) => (runtime ? `reste ${fmtDur(Math.max(runtime - watched, 0))}` : '');
+const epRuntime = (e) => e.title.runtime || 60;
+
 function nextLine(entry, p) {
   if (p.movie) {
     if (p.done) return 'Vu';
-    return entry.minutes ? `${entry.minutes} / ${entry.title.runtime || '?'} min` : 'Pas encore commencé';
+    return entry.minutes ? `${fmtDur(entry.minutes)} vues${entry.title.runtime ? ` · <b>${leftText(entry.minutes, entry.title.runtime)}</b>` : ''}` : 'Pas encore commencé';
   }
   if (p.finished) return 'Série terminée';
   if (p.upToDate) return 'À jour · en attente de la suite';
-  if (p.next && p.nextMinutes) return `Reprendre · <b>${epLabel(p.next)}</b> à ${p.nextMinutes} min`;
+  if (p.next && p.nextMinutes) return `Reprendre · <b>${epLabel(p.next)}</b> à ${p.nextMinutes} min · ${leftText(p.nextMinutes, epRuntime(entry))}`;
   if (p.next) return `Prochain · <b>${epLabel(p.next)}</b>`;
   return '';
 }
@@ -463,13 +468,14 @@ function progressCardTV(e, p) {
 
 // Curseur « Arrêté à … min » pour l'épisode en cours.
 function episodeMinutes(e, p) {
-  const runtime = e.title.runtime || 60;
+  const runtime = epRuntime(e);
   const m = Math.min(p.nextMinutes, runtime);
   return `<div class="ep-minutes">
     <div class="ep-minutes-head">
       <span>${icon('clock')} Arrêté à <b data-out="epmin">${m} min</b></span>
-      <span class="muted">${epLabel(p.next)} · ${runtime} min</span>
+      <span class="left" data-out="epleft">${leftText(m, runtime)}</span>
     </div>
+    <p class="ep-minutes-sub">${epLabel(p.next)} · durée ${fmtDur(runtime)}</p>
     <input class="range" type="range" min="0" max="${runtime}" step="1" value="${m}"
       data-input="epMinutes" data-id="${esc(e.id)}" aria-label="Minutes regardées de ${epLabel(p.next)}" style="--v:${(m / runtime) * 100}%">
   </div>`;
@@ -480,8 +486,8 @@ function progressCardMovie(e, p) {
   return `<section class="card progress-card">
     <div class="pc-top">
       <div><span class="label">${p.done ? 'Film vu' : 'Progression'}</span>
-        <div class="big">${p.done ? 'Terminé' : `${e.minutes || 0} min`}</div>
-        ${!p.done && e.title.runtime ? `<span class="epname">sur ${e.title.runtime} min</span>` : ''}</div>
+        <div class="big">${p.done ? 'Terminé' : `<span data-out="mvmin">${fmtDur(e.minutes || 0)}</span>`}</div>
+        ${!p.done && e.title.runtime ? `<span class="epname">sur ${fmtDur(e.title.runtime)} · <b class="left" data-out="mvleft">${leftText(e.minutes || 0, e.title.runtime)}</b></span>` : ''}</div>
       ${p.done ? '' : `<button class="plus xl done-btn" data-action="movieDone" data-id="${esc(e.id)}" aria-label="Marquer comme vu">${icon('check')}</button>`}
     </div>
     ${p.done ? bar(1) : `<input class="range" type="range" min="0" max="${runtime}" step="1" value="${e.minutes || 0}"
@@ -913,7 +919,7 @@ function renderSheet() {
     body = `<h3 class="sheet-title">Où en es-tu ?</h3>
       <p class="muted">Indique le prochain épisode que tu vas regarder.</p>
       ${positionPicker(sh)}
-      <div class="sheet-sec"><h4>Déjà regardé de cet épisode : <b data-out="posmin">${sh.minutes}</b> min</h4>
+      <div class="sheet-sec"><h4>Déjà regardé de cet épisode : <b data-out="posmin">${sh.minutes}</b> min · <span class="left" data-out="posleft">${leftText(sh.minutes, t.runtime || 60)}</span></h4>
         <input class="range" type="range" min="0" max="${t.runtime || 60}" value="${sh.minutes}" data-input="posMinutes"
           style="--v:${(sh.minutes / (t.runtime || 60)) * 100}%"></div>
       <button class="btn primary block" data-action="savePosition">Enregistrer</button>`;
@@ -935,7 +941,7 @@ function renderSheet() {
         <div class="seg">${statuses.map(([k, l]) => `<button class="${sh.status === k ? 'on' : ''}" data-action="sheetStatus" data-status="${k}">${l}</button>`).join('')}</div>
       </div>
       ${sh.status === 'watching' && t.type === 'tv' ? `<div class="sheet-sec"><h4>Prochain épisode à voir</h4>${positionPicker(sh)}</div>` : ''}
-      ${sh.status === 'watching' && t.type === 'movie' ? `<div class="sheet-sec"><h4>Déjà regardé : <b data-out="minutes">${sh.minutes}</b> min</h4>
+      ${sh.status === 'watching' && t.type === 'movie' ? `<div class="sheet-sec"><h4>Déjà regardé : <b data-out="minutes">${sh.minutes}</b> min${t.runtime ? ` · <span class="left" data-out="sheetleft">${leftText(sh.minutes, t.runtime)}</span>` : ''}</h4>
         <input class="range" type="range" min="0" max="${t.runtime || 180}" value="${sh.minutes}" data-input="sheetMinutes" style="--v:${(sh.minutes / (t.runtime || 180)) * 100}%"></div>` : ''}
       <button class="btn primary block" data-action="sheetSave" ${sh.loading ? 'disabled' : ''}>Ajouter à ma bibliothèque</button>`;
   }
@@ -1206,15 +1212,25 @@ document.addEventListener('input', (ev) => {
     return;
   }
   const kind = el.dataset.input;
-  if (kind === 'epMinutes') $('[data-out="epmin"]').textContent = `${el.value} min`;
+  const setOut = (name, text) => { const out = $(`[data-out="${name}"]`); if (out) out.textContent = text; };
+  if (kind === 'epMinutes') {
+    setOut('epmin', `${el.value} min`);
+    setOut('epleft', leftText(+el.value, +el.max));
+  }
+  if (kind === 'minutes') {
+    setOut('mvmin', fmtDur(+el.value));
+    setOut('mvleft', leftText(+el.value, +el.max));
+  }
   if (kind === 'posMinutes') {
     ui.sheet.minutes = +el.value;
     $('[data-out="posmin"]').textContent = el.value;
+    setOut('posleft', leftText(+el.value, +el.max));
   }
   if (kind === 'minutes' || kind === 'sheetMinutes' || kind === 'epMinutes' || kind === 'posMinutes') el.style.setProperty('--v', `${(el.value / el.max) * 100}%`);
   if (kind === 'sheetMinutes') {
     ui.sheet.minutes = +el.value;
     $('[data-out="minutes"]').textContent = el.value;
+    setOut('sheetleft', leftText(+el.value, +el.max));
   }
 });
 
