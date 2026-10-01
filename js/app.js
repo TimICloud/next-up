@@ -1,5 +1,6 @@
 import * as S from './store.js';
 import * as C from './catalog.js';
+import * as Auth from './auth.js';
 import { PLATFORMS, platform } from './platforms.js';
 import { icon } from './icons.js';
 
@@ -90,6 +91,7 @@ function viewHome() {
         <h2>Ta bibliothèque est vide</h2>
         <p>Ajoute la série ou le film que tu regardes, choisis la plateforme et indique où tu en es.</p>
         <a class="btn primary" href="#/add">${icon('plus')} Ajouter un titre</a>
+        ${Auth.enabled && !Auth.user() ? '<a class="link" href="#/account/login">J’ai déjà un compte · me connecter</a>' : ''}
       </div>`;
   }
 
@@ -107,6 +109,7 @@ function viewHome() {
       <h1>On reprend où<br>tu t’étais arrêté.</h1>
     </header>
 
+    ${Auth.enabled && !Auth.user() ? accountBanner() : ''}
     ${alerts.map(({ e, to }) => alertCard(e, to)).join('')}
 
     <section class="block">
@@ -126,6 +129,12 @@ function viewHome() {
       <div class="row-scroll">${planned.map((e) => miniPoster(e)).join('')}</div>
     </section>` : ''}`;
 }
+
+const accountBanner = () => `<a class="account-banner" href="#/account/signup">
+    <span class="logo-mark">+1</span>
+    <span><b>Crée ton compte Next Up</b><small>Tout le catalogue films et séries, et ta progression sur tous tes appareils.</small></span>
+    ${icon('back', 'flip')}
+  </a>`;
 
 function resumeCard(e, p) {
   const t = e.title;
@@ -210,7 +219,8 @@ function tile(e) {
 
 function viewAdd() {
   return `<header class="page-head compact"><h1>Ajouter</h1>
-      <p class="muted">Cherche un film ou une série${S.settings().tmdbKey ? '' : ' (catalogue de démo)'}.</p></header>
+      <p class="muted">Cherche un film ou une série${C.live() ? '' : ' (catalogue de démo)'}.</p></header>
+    ${Auth.enabled && !Auth.user() ? `<p class="hint-card">${icon('search')}<span><a href="#/account/login">Connecte-toi</a> pour chercher dans tous les films et séries.</span></p>` : ''}
     <label class="search">
       ${icon('search')}
       <input id="q" type="search" placeholder="Suits, Dune, The Bear…" value="${esc(ui.query)}" autocomplete="off" enterkeyhint="search">
@@ -313,7 +323,7 @@ function platformCard(e) {
     ${history.length > 1 ? `<ol class="timeline">${history.map((h) =>
       `<li><i style="--pc:${platform(h.platform).color}"></i><b>${esc(platform(h.platform).name)}</b><span>depuis le ${date(h.at)}</span></li>`).join('')}</ol>` : ''}
     <div class="avail"><span class="label">Disponible en ${esc(S.settings().region)}${e.title.source === 'demo' ? ' (démo)' : ''}</span>
-      ${avail == null ? `<p class="muted">${S.settings().tmdbKey ? 'Recherche…' : 'Ajoute une clé TMDB dans Profil pour voir les plateformes réelles.'}</p>`
+      ${avail == null ? `<p class="muted">${C.live() ? 'Recherche…' : 'Disponible avec un compte Next Up.'}</p>`
         : avail.length ? `<div class="chips">${avail.map(chip).join('')}</div>` : '<p class="muted">Aucune plateforme d’abonnement trouvée.</p>'}
     </div>
   </section>`;
@@ -365,34 +375,89 @@ function viewProfile() {
       <div class="stat"><b>${st.moviesSeen + st.showsDone}</b><span>terminés</span></div>
     </div>
 
+    ${accountCard()}
+
     <section class="card">
-      <div class="card-title">${icon('key')}<h3>Catalogue complet (TMDB)</h3></div>
-      <p class="muted">Sans clé, l’app utilise un petit catalogue de démo. Avec une clé gratuite TMDB, tu as accès à tous les films et séries, avec les affiches, les noms d’épisodes et les plateformes disponibles dans ton pays.</p>
-      <ol class="steps"><li>Crée un compte TMDB (The Movie Database)</li>
-        <li>Dans Paramètres → API, demande une clé (usage personnel)</li><li>Colle la clé ou le jeton ici</li></ol>
-      <form class="key-form" data-form="key">
-        <input name="key" type="password" placeholder="Clé API ou jeton de lecture" value="${esc(s.tmdbKey)}" autocomplete="off">
-        <button class="btn primary" type="submit">${s.tmdbKey ? 'Mettre à jour' : 'Enregistrer'}</button>
-      </form>
-      ${s.tmdbKey ? `<p class="hint ok">${icon('check')} Clé enregistrée sur cet appareil.</p>` : ''}
-      <label class="field"><span>Pays (pour les plateformes disponibles)</span>
+      <label class="field first"><span>Pays (pour les plateformes disponibles)</span>
         <select data-input="region">${[['BE', 'Belgique'], ['FR', 'France'], ['CH', 'Suisse'], ['LU', 'Luxembourg'], ['CA', 'Canada']].map(([k, l]) =>
           `<option value="${k}" ${s.region === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
     </section>
 
     <section class="card">
       <div class="card-title">${icon('download')}<h3>Mes données</h3></div>
-      <p class="muted">Ta bibliothèque est enregistrée sur cet appareil. Exporte-la pour la sauvegarder ou la transférer.</p>
+      <p class="muted">${S.syncing() ? 'Ta bibliothèque est sauvegardée dans ton compte. Tu peux aussi l’exporter dans un fichier.' : 'Ta bibliothèque est enregistrée sur cet appareil. Exporte-la pour la sauvegarder ou la transférer.'}</p>
       <div class="btn-row">
         <button class="btn" data-action="export">${icon('download')} Exporter</button>
         <label class="btn">${icon('upload')} Importer<input type="file" accept="application/json" data-input="import" hidden></label>
       </div>
       <div class="btn-row">
-        <button class="btn ghost" data-action="resetDemo">Recharger la démo</button>
+        ${S.syncing() ? '' : '<button class="btn ghost" data-action="resetDemo">Recharger la démo</button>'}
         <button class="btn ghost danger" data-action="clearAll">Tout effacer</button>
       </div>
     </section>
     <p class="credit muted">Next Up utilise l’API TMDB mais n’est ni approuvé ni certifié par TMDB.</p>`;
+}
+
+function accountCard() {
+  if (!Auth.enabled) {
+    return `<section class="card">
+      <div class="card-title">${icon('user')}<h3>Compte Next Up</h3></div>
+      <p class="muted">Les comptes ne sont pas encore activés : l’app tourne en mode démo, avec un catalogue limité. Une fois le serveur configuré, tu pourras créer ton compte pour accéder à tous les films et séries et retrouver ta progression sur tous tes appareils.</p>
+    </section>`;
+  }
+  const u = Auth.user();
+  if (!u) {
+    return `<section class="card">
+      <div class="card-title">${icon('user')}<h3>Compte Next Up</h3></div>
+      <p class="muted">Crée ton compte gratuit pour accéder à tous les films et séries, voir où ils sont disponibles et retrouver ta progression sur tous tes appareils.</p>
+      <div class="btn-row">
+        <a class="btn primary" href="#/account/signup">Créer un compte</a>
+        <a class="btn" href="#/account/login">Se connecter</a>
+      </div>
+    </section>`;
+  }
+  const name = Auth.displayName();
+  return `<section class="card account">
+    <span class="avatar">${esc(name.slice(0, 1).toUpperCase())}</span>
+    <div class="account-info"><b>${esc(name)}</b><span class="muted">${esc(u.email)}</span>
+      <span class="hint ok">${icon('check')} Catalogue complet · bibliothèque synchronisée</span></div>
+    <button class="btn small ghost" data-action="signOut">Déconnexion</button>
+  </section>`;
+}
+
+const PERKS = ['Tous les films et séries, avec leurs affiches', 'Ta progression sur téléphone et ordinateur', 'Une alerte quand une série change de plateforme'];
+
+function viewAccount(mode) {
+  if (!Auth.enabled) {
+    return `<div class="empty"><h2>Comptes pas encore activés</h2><p>Le serveur Next Up n’est pas encore configuré. L’app fonctionne en mode démo.</p><a class="btn" href="#/">Retour à l’accueil</a></div>`;
+  }
+  if (Auth.user()) {
+    return `<div class="empty"><h2>Tu es connecté</h2><p>${esc(Auth.user().email)}</p><a class="btn primary" href="#/">Aller à l’accueil</a></div>`;
+  }
+  const signup = mode === 'signup';
+  const reset = mode === 'reset';
+  const notice = ui.authNotice;
+  ui.authNotice = null;
+  const title = signup ? 'Crée ton compte' : reset ? 'Mot de passe oublié' : 'Bon retour !';
+  const sub = signup ? 'Gratuit, en 30 secondes.' : reset ? 'Indique ton e-mail, on t’envoie un lien pour choisir un nouveau mot de passe.' : 'Connecte-toi pour retrouver ta bibliothèque.';
+  return `<div class="auth">
+    <button class="icon-btn" data-action="back" aria-label="Retour">${icon('back')}</button>
+    <div class="auth-head"><span class="logo-mark big">+1</span><h1>${title}</h1><p class="muted">${sub}</p></div>
+    ${notice ? `<p class="notice">${esc(notice)}</p>` : ''}
+    ${reset ? '' : `<div class="seg auth-tabs">
+      <a href="#/account/signup" class="${signup ? 'on' : ''}">Créer un compte</a>
+      <a href="#/account/login" class="${signup ? '' : 'on'}">Se connecter</a></div>`}
+    <form class="auth-form" data-form="auth" data-mode="${signup ? 'signup' : reset ? 'reset' : 'login'}" novalidate>
+      ${signup ? '<label class="field"><span>Prénom</span><input name="name" autocomplete="given-name" required></label>' : ''}
+      <label class="field"><span>E-mail</span><input name="email" type="email" autocomplete="email" inputmode="email" required></label>
+      ${reset ? '' : `<label class="field"><span>Mot de passe</span><input name="password" type="password" minlength="6" autocomplete="${signup ? 'new-password' : 'current-password'}" required>${signup ? '<small>6 caractères minimum</small>' : ''}</label>`}
+      <p class="form-error" hidden></p>
+      <button class="btn primary block" type="submit">${signup ? 'Créer mon compte' : reset ? 'Envoyer le lien' : 'Se connecter'}</button>
+    </form>
+    ${mode === 'login' || !mode ? '<a class="link center" href="#/account/reset">Mot de passe oublié ?</a>' : ''}
+    ${reset ? '<a class="link center" href="#/account/login">Retour à la connexion</a>' : ''}
+    ${signup ? `<ul class="perks">${PERKS.map((p) => `<li>${icon('check')}${p}</li>`).join('')}</ul>` : ''}
+  </div>`;
 }
 
 // ——— Feuille d'ajout / de position ———
@@ -594,6 +659,9 @@ const actions = {
     a.click();
     URL.revokeObjectURL(a.href);
   },
+  async signOut() {
+    if (confirm('Te déconnecter ? Ta bibliothèque reste sauvegardée dans ton compte.')) await Auth.signOut();
+  },
   resetDemo() { if (confirm('Remplacer ta bibliothèque par la démo ?')) { S.resetDemo(); toast('Démo rechargée'); } },
   clearAll() { if (confirm('Effacer toute ta bibliothèque ? Cette action est définitive.')) { S.clearLibrary(); toast('Bibliothèque vidée'); } },
 };
@@ -642,28 +710,40 @@ document.addEventListener('change', (ev) => {
 
 document.addEventListener('submit', async (ev) => {
   const form = ev.target;
-  if (form.dataset.form !== 'key') return;
+  if (form.dataset.form !== 'auth') return;
   ev.preventDefault();
-  const key = new FormData(form).get('key').trim();
-  if (key) {
-    const button = form.querySelector('button');
-    button.disabled = true;
-    button.textContent = 'Vérification…';
-    const check = await C.checkKey(key);
-    if (check === 'invalid') {
-      toast('Clé refusée par TMDB · vérifie-la');
-      button.disabled = false;
-      button.textContent = 'Enregistrer';
-      return;
+  const mode = form.dataset.mode;
+  const data = new FormData(form);
+  const email = String(data.get('email') || '').trim();
+  const password = String(data.get('password') || '');
+  const name = String(data.get('name') || '').trim();
+  const error = form.querySelector('.form-error');
+  const button = form.querySelector('[type=submit]');
+  const fail = (message) => { error.textContent = message; error.hidden = false; };
+
+  error.hidden = true;
+  if (mode === 'signup' && !name) return fail('Indique ton prénom.');
+  if (!/^\S+@\S+\.\S+$/.test(email)) return fail('Cette adresse e-mail n’est pas valide.');
+  if (mode !== 'reset' && password.length < 6) return fail('Le mot de passe doit faire au moins 6 caractères.');
+
+  button.disabled = true;
+  try {
+    if (mode === 'login') await Auth.signIn(email, password);
+    else if (mode === 'signup') {
+      if ((await Auth.signUp(email, password, name)) === 'confirm-email') {
+        ui.authNotice = `Presque fini ! Clique sur le lien envoyé à ${email}, puis connecte-toi.`;
+        location.hash = '#/account/login';
+      }
+    } else {
+      await Auth.resetPassword(email);
+      ui.authNotice = `Si un compte existe pour ${email}, un e-mail vient d’être envoyé.`;
+      location.hash = '#/account/login';
     }
-    S.updateSettings({ tmdbKey: key });
-    toast(check === 'ok' ? 'Clé TMDB valide · catalogue complet activé' : 'Clé enregistrée (vérification impossible hors ligne)');
-  } else {
-    S.updateSettings({ tmdbKey: '' });
-    toast('Clé supprimée · retour au catalogue de démo');
+  } catch (e) {
+    fail(e.message);
+  } finally {
+    button.disabled = false;
   }
-  ui.results = null;
-  refreshLibrary(true);
 });
 
 document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape' && ui.sheet) closeSheet(); });
@@ -739,10 +819,12 @@ function render() {
   else if (r.name === 'add') view.innerHTML = viewAdd();
   else if (r.name === 'profile') view.innerHTML = viewProfile();
   else if (r.name === 'title') view.innerHTML = viewTitle(r.arg);
+  else if (r.name === 'account') view.innerHTML = viewAccount(r.arg);
   else view.innerHTML = viewHome();
   view.dataset.route = r.name;
 
-  document.querySelectorAll('.nav a').forEach((a) => a.classList.toggle('active', a.dataset.route === r.name));
+  const navRoute = r.name === 'account' ? 'profile' : r.name;
+  document.querySelectorAll('.nav a').forEach((a) => a.classList.toggle('active', a.dataset.route === navRoute));
 }
 
 window.addEventListener('hashchange', () => {
@@ -764,11 +846,44 @@ window.addEventListener('hashchange', () => {
   }
 });
 
-S.init();
-S.subscribe(render);
-render();
-window.dispatchEvent(new HashChangeEvent('hashchange'));
-refreshLibrary();
+// Connexion / déconnexion d'un compte Next Up.
+Auth.onChange(async (user) => {
+  ui.results = null;
+  ui.epNames = {};
+  if (!user) {
+    S.stopSync();
+    return;
+  }
+  try {
+    await S.startSync(Auth.db(), user.id);
+  } catch {
+    toast('Synchronisation impossible pour le moment');
+  }
+  if (route().name === 'account') location.hash = '#/';
+  toast(`Bienvenue ${esc(Auth.displayName())} !`);
+  refreshLibrary(true);
+});
+
+// En revenant sur l'app, on récupère les changements faits sur les autres appareils.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && S.syncing()) S.pull().catch(() => {});
+});
+
+async function boot() {
+  S.init();
+  S.subscribe(render);
+  render();
+  try {
+    await Auth.init();
+    if (Auth.user()) await S.startSync(Auth.db(), Auth.user().id);
+  } catch {
+    // Hors ligne : on continue avec la bibliothèque enregistrée sur l'appareil.
+  }
+  window.dispatchEvent(new HashChangeEvent('hashchange'));
+  refreshLibrary();
+}
+
+boot();
 
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
   navigator.serviceWorker.register('sw.js').catch(() => {});

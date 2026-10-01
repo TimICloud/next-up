@@ -1,7 +1,7 @@
 // Mode hors ligne : réseau d'abord, cache en secours pour les fichiers de l'app.
 // Les appels à l'API TMDB ne sont jamais mis en cache ici (l'app garde ses propres données).
-const CACHE = 'nextup-v2';
-const SHELL = ['./', 'index.html', 'css/app.css', 'js/app.js', 'js/store.js', 'js/catalog.js', 'js/platforms.js', 'js/icons.js', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png'];
+const CACHE = 'nextup-v3';
+const SHELL = ['./', 'index.html', 'css/app.css', 'js/app.js', 'js/store.js', 'js/catalog.js', 'js/platforms.js', 'js/icons.js', 'js/auth.js', 'js/config.js', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
@@ -16,7 +16,7 @@ self.addEventListener('activate', (e) => {
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
   if (e.request.method !== 'GET' || url.hostname === 'api.themoviedb.org') return;
-  const cacheable = url.origin === self.location.origin || url.hostname.endsWith('tmdb.org') || url.hostname === 'upload.wikimedia.org' || url.hostname.includes('fonts.g');
+  const cacheable = url.origin === self.location.origin || url.hostname.endsWith('tmdb.org') || url.hostname === 'upload.wikimedia.org' || url.hostname === 'cdn.jsdelivr.net' || url.hostname.includes('fonts.g');
   if (!cacheable) return;
   e.respondWith(
     fetch(e.request)

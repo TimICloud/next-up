@@ -28,7 +28,7 @@ export function init() {
   }
 }
 
-const emptyState = () => ({ version: 1, entries: {}, settings: { tmdbKey: '', region: 'BE' } });
+const emptyState = () => ({ version: 1, entries: {}, settings: { region: 'BE' }, sync: null });
 
 function persist() {
   try {
@@ -41,6 +41,7 @@ function persist() {
 function commit() {
   persist();
   listeners.forEach((fn) => fn());
+  schedulePush();
 }
 
 export const subscribe = (fn) => listeners.add(fn);
@@ -122,7 +123,7 @@ export function plusOne(id) {
 }
 
 export function restore(snapshot) {
-  state.entries[snapshot.id] = snapshot;
+  state.entries[snapshot.id] = { ...snapshot, updatedAt: Date.now() };
   commit();
 }
 
@@ -229,6 +230,7 @@ export function platformAlert(entry) {
 export function ackAlert(id) {
   const entry = state.entries[id];
   entry.alertAck = (entry.providers || []).join(',');
+  touch(entry);
   commit();
 }
 
@@ -293,7 +295,8 @@ export const exportData = () => JSON.stringify({ app: 'next-up', exportedAt: new
 export function importData(json) {
   const data = JSON.parse(json);
   if (!data || typeof data.entries !== 'object') throw new Error('Fichier non reconnu');
-  state.entries = data.entries;
+  const now = Date.now();
+  state.entries = Object.fromEntries(Object.entries(data.entries).map(([id, e]) => [id, { ...e, updatedAt: now }]));
   commit();
 }
 
@@ -306,6 +309,82 @@ export function resetDemo() {
   state.entries = {};
   seedDemo();
   commit();
+}
+
+// ——— Synchronisation avec le compte Next Up ———
+// Chaque entrée porte `updatedAt` ; la version la plus récente gagne.
+// `state.sync.at[id]` = date de la dernière version envoyée/reçue (-1 : suppression envoyée).
+
+let sync = null;
+let pushTimer;
+
+export const syncing = () => Boolean(sync);
+
+export async function startSync(client, userId) {
+  sync = { client, userId };
+  if (state.sync?.userId !== userId) {
+    // Nouveau compte sur cet appareil : la bibliothèque de démo n'est pas importée dans le compte.
+    for (const id of Object.keys(state.entries)) if (id.startsWith('demo-')) delete state.entries[id];
+    state.sync = { userId, at: {} };
+  }
+  await pull();
+}
+
+export function stopSync() {
+  sync = null;
+  clearTimeout(pushTimer);
+  state.entries = {};
+  state.sync = null;
+  persist();
+  listeners.forEach((fn) => fn());
+}
+
+export async function pull() {
+  if (!sync) return;
+  const { data, error } = await sync.client.from('library_entries').select('id, data, deleted');
+  if (error) throw error;
+  const at = state.sync.at;
+  for (const row of data) {
+    const remote = row.data;
+    const local = state.entries[row.id];
+    if (row.deleted) {
+      if (local && local.updatedAt <= remote.updatedAt) delete state.entries[row.id];
+      if (!local || local.updatedAt <= remote.updatedAt) at[row.id] = -1;
+      continue;
+    }
+    if (!local || remote.updatedAt > local.updatedAt) state.entries[row.id] = remote;
+    at[row.id] = remote.updatedAt;
+  }
+  persist();
+  listeners.forEach((fn) => fn());
+  schedulePush();
+}
+
+function schedulePush() {
+  if (!sync) return;
+  clearTimeout(pushTimer);
+  pushTimer = setTimeout(push, 600);
+}
+
+async function push() {
+  if (!sync) return;
+  const at = state.sync.at;
+  const now = Date.now();
+  const rows = [];
+  for (const e of Object.values(state.entries)) {
+    if ((at[e.id] || 0) < e.updatedAt) rows.push({ id: e.id, data: e, deleted: false, updated_at: new Date(e.updatedAt).toISOString() });
+  }
+  for (const id of Object.keys(at)) {
+    if (!state.entries[id] && at[id] !== -1) rows.push({ id, data: { id, updatedAt: now }, deleted: true, updated_at: new Date(now).toISOString() });
+  }
+  if (!rows.length) return;
+  const { error } = await sync.client.from('library_entries').upsert(rows.map((r) => ({ ...r, user_id: sync.userId })));
+  if (error) {
+    pushTimer = setTimeout(push, 15000); // hors ligne : on réessaie plus tard
+    return;
+  }
+  for (const r of rows) at[r.id] = r.deleted ? -1 : r.data.updatedAt;
+  persist();
 }
 
 // ——— Bibliothèque de démonstration ———

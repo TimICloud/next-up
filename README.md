@@ -17,18 +17,25 @@ ruby -run -e httpd . -p 8770
 
 Puis ouvre http://localhost:8770.
 
-## Catalogue
+## Comptes et catalogue
 
-- Sans configuration : catalogue de démonstration intégré (les plateformes indiquées y sont fictives).
-- Avec une clé **TMDB** gratuite (Profil → Catalogue complet) : tous les films et séries, affiches, noms d'épisodes, nouvelles saisons et plateformes réellement disponibles dans ton pays.
+- Sans serveur configuré : mode démo, catalogue intégré (les plateformes indiquées y sont fictives).
+- Avec le serveur Next Up (Supabase) : chaque utilisateur crée son compte Next Up et accède à tout le catalogue TMDB
+  (affiches, épisodes, plateformes réellement disponibles dans son pays). La clé TMDB reste sur le serveur.
+  La bibliothèque est sauvegardée dans le compte et synchronisée entre appareils.
+
+Mise en place : voir [SETUP.md](SETUP.md).
 
 ## Structure
 
 | Fichier | Rôle |
 |---|---|
 | `js/app.js` | Écrans, navigation, actions |
-| `js/store.js` | Bibliothèque, progression, sauvegarde (navigateur) |
-| `js/catalog.js` | Catalogue démo + API TMDB |
+| `js/store.js` | Bibliothèque, progression, sauvegarde et synchronisation |
+| `js/catalog.js` | Catalogue démo + TMDB via le serveur Next Up |
+| `js/auth.js`, `js/config.js` | Comptes Next Up (Supabase) |
+| `supabase/functions/tmdb` | Passerelle serveur vers TMDB (garde la clé secrète) |
+| `supabase/schema.sql` | Table des bibliothèques, accès limité à chaque utilisateur |
 | `js/platforms.js` | Plateformes de streaming |
 | `css/app.css` | Design (palette Néon) |
 | `sw.js`, `manifest.webmanifest` | App installable et hors ligne |

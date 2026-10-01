@@ -1,9 +1,10 @@
 // Catalogue des films et séries.
-// - Sans clé TMDB : un petit catalogue de démonstration intégré (données illustratives).
-// - Avec une clé TMDB : recherche dans tout le catalogue mondial, affiches, épisodes et plateformes réelles.
+// - Sans compte : un petit catalogue de démonstration intégré (données illustratives).
+// - Connecté à un compte Next Up : tout le catalogue TMDB, via le serveur Next Up
+//   (qui détient la clé TMDB ; l'app ne la voit jamais).
 import { matchProvider } from './platforms.js';
+import * as Auth from './auth.js';
 
-const API = 'https://api.themoviedb.org/3';
 const IMG = 'https://image.tmdb.org/t/p/';
 
 export const img = (path, size = 'w342') => IMG + size + path;
@@ -116,28 +117,20 @@ export function paletteFor(name) {
   return [`hsl(${h} 55% 32%)`, `hsl(${(h + 40) % 360} 60% 8%)`];
 }
 
-async function call(path, key, params = {}) {
-  const url = new URL(API + path);
-  const bearer = key.startsWith('eyJ');
+// Catalogue complet disponible : comptes activés et utilisateur connecté.
+export const live = () => Auth.enabled && Boolean(Auth.user());
+
+async function call(path, params = {}) {
+  const url = new URL(Auth.functionUrl('tmdb'));
+  url.searchParams.set('path', path);
   url.searchParams.set('language', 'fr-FR');
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
-  if (!bearer) url.searchParams.set('api_key', key);
-  const res = await fetch(url, bearer ? { headers: { Authorization: `Bearer ${key}` } } : {});
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${Auth.token()}`, apikey: Auth.anonKey } });
   if (!res.ok) throw new Error(`TMDB ${res.status}`);
   return res.json();
 }
 
-// 'ok', 'invalid' (refusée par TMDB) ou 'offline' (impossible de vérifier).
-export async function checkKey(key) {
-  try {
-    await call('/configuration', key);
-    return 'ok';
-  } catch (e) {
-    return /TMDB 40[13]/.test(e.message) ? 'invalid' : 'offline';
-  }
-}
-
-const fromTmdb =(r, type = r.media_type) => ({
+const fromTmdb = (r, type = r.media_type) => ({
   id: `tmdb-${type}-${r.id}`, source: 'tmdb', tmdbId: r.id, type,
   name: r.name || r.title,
   original: r.original_name || r.original_title,
@@ -148,24 +141,24 @@ const fromTmdb =(r, type = r.media_type) => ({
 });
 
 export async function search(query, settings) {
-  if (!settings.tmdbKey) {
+  if (!live()) {
     const q = norm(query);
     return DEMO.filter((t) => norm(t.name).includes(q) || norm(t.original).includes(q));
   }
-  const d = await call('/search/multi', settings.tmdbKey, { query, include_adult: 'false', region: settings.region });
+  const d = await call('/search/multi', { query, include_adult: 'false', region: settings.region });
   return d.results.filter((r) => r.media_type === 'tv' || r.media_type === 'movie').slice(0, 24).map((r) => fromTmdb(r));
 }
 
-export async function suggestions(settings) {
-  if (!settings.tmdbKey) return DEMO;
-  const d = await call('/trending/all/week', settings.tmdbKey);
+export async function suggestions() {
+  if (!live()) return DEMO;
+  const d = await call('/trending/all/week');
   return d.results.filter((r) => r.media_type === 'tv' || r.media_type === 'movie').map((r) => fromTmdb(r));
 }
 
 // Complète un titre : saisons et nombre d'épisodes, durée, statut (terminée ou en cours de diffusion).
-export async function details(title, settings) {
-  if (title.source !== 'tmdb' || !settings.tmdbKey) return title;
-  const d = await call(`/${title.type}/${title.tmdbId}`, settings.tmdbKey);
+export async function details(title) {
+  if (title.source !== 'tmdb' || !live()) return title;
+  const d = await call(`/${title.type}/${title.tmdbId}`);
   const t = { ...title, ...fromTmdb(d, title.type), genres: (d.genres || []).map((g) => g.name), refreshedAt: Date.now() };
   if (!t.overview) t.overview = title.overview;
   if (title.type === 'tv') {
@@ -186,15 +179,15 @@ export async function details(title, settings) {
 // Plateformes où le titre est disponible dans le pays choisi (abonnement, gratuit ou avec pub).
 export async function providers(title, settings) {
   if (title.source !== 'tmdb') return title.providers || [];
-  if (!settings.tmdbKey) return null;
-  const d = await call(`/${title.type}/${title.tmdbId}/watch/providers`, settings.tmdbKey);
+  if (!live()) return null;
+  const d = await call(`/${title.type}/${title.tmdbId}/watch/providers`);
   const r = d.results?.[settings.region];
   const list = [...(r?.flatrate || []), ...(r?.free || []), ...(r?.ads || [])];
   return [...new Set(list.map((p) => matchProvider(p.provider_name)).filter(Boolean))];
 }
 
-export async function seasonEpisodes(title, season, settings) {
-  if (title.source !== 'tmdb' || !settings.tmdbKey) return null;
-  const d = await call(`/tv/${title.tmdbId}/season/${season}`, settings.tmdbKey);
+export async function seasonEpisodes(title, season) {
+  if (title.source !== 'tmdb' || !live()) return null;
+  const d = await call(`/tv/${title.tmdbId}/season/${season}`);
   return Object.fromEntries((d.episodes || []).map((e) => [e.episode_number, e.name]));
 }
