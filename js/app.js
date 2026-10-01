@@ -368,7 +368,7 @@ function viewProfile() {
     <section class="card">
       <div class="card-title">${icon('key')}<h3>Catalogue complet (TMDB)</h3></div>
       <p class="muted">Sans clé, l’app utilise un petit catalogue de démo. Avec une clé gratuite TMDB, tu as accès à tous les films et séries, avec les affiches, les noms d’épisodes et les plateformes disponibles dans ton pays.</p>
-      <ol class="steps"><li>Crée un compte sur <a href="https://www.themoviedb.org/signup" target="_blank" rel="noopener">themoviedb.org</a></li>
+      <ol class="steps"><li>Crée un compte TMDB (The Movie Database)</li>
         <li>Dans Paramètres → API, demande une clé (usage personnel)</li><li>Colle la clé ou le jeton ici</li></ol>
       <form class="key-form" data-form="key">
         <input name="key" type="password" placeholder="Clé API ou jeton de lecture" value="${esc(s.tmdbKey)}" autocomplete="off">
@@ -392,7 +392,7 @@ function viewProfile() {
         <button class="btn ghost danger" data-action="clearAll">Tout effacer</button>
       </div>
     </section>
-    <p class="credit muted">Next Up · données de films et séries fournies par TMDB lorsqu’une clé est configurée.</p>`;
+    <p class="credit muted">Next Up utilise l’API TMDB mais n’est ni approuvé ni certifié par TMDB.</p>`;
 }
 
 // ——— Feuille d'ajout / de position ———
@@ -640,14 +640,29 @@ document.addEventListener('change', (ev) => {
   }
 });
 
-document.addEventListener('submit', (ev) => {
+document.addEventListener('submit', async (ev) => {
   const form = ev.target;
   if (form.dataset.form !== 'key') return;
   ev.preventDefault();
   const key = new FormData(form).get('key').trim();
-  S.updateSettings({ tmdbKey: key });
+  if (key) {
+    const button = form.querySelector('button');
+    button.disabled = true;
+    button.textContent = 'Vérification…';
+    const check = await C.checkKey(key);
+    if (check === 'invalid') {
+      toast('Clé refusée par TMDB · vérifie-la');
+      button.disabled = false;
+      button.textContent = 'Enregistrer';
+      return;
+    }
+    S.updateSettings({ tmdbKey: key });
+    toast(check === 'ok' ? 'Clé TMDB valide · catalogue complet activé' : 'Clé enregistrée (vérification impossible hors ligne)');
+  } else {
+    S.updateSettings({ tmdbKey: '' });
+    toast('Clé supprimée · retour au catalogue de démo');
+  }
   ui.results = null;
-  toast(key ? 'Clé TMDB enregistrée' : 'Clé supprimée');
   refreshLibrary(true);
 });
 

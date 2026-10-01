@@ -127,7 +127,17 @@ async function call(path, key, params = {}) {
   return res.json();
 }
 
-const fromTmdb = (r, type = r.media_type) => ({
+// 'ok', 'invalid' (refusée par TMDB) ou 'offline' (impossible de vérifier).
+export async function checkKey(key) {
+  try {
+    await call('/configuration', key);
+    return 'ok';
+  } catch (e) {
+    return /TMDB 40[13]/.test(e.message) ? 'invalid' : 'offline';
+  }
+}
+
+const fromTmdb =(r, type = r.media_type) => ({
   id: `tmdb-${type}-${r.id}`, source: 'tmdb', tmdbId: r.id, type,
   name: r.name || r.title,
   original: r.original_name || r.original_title,
