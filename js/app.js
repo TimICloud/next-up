@@ -766,7 +766,7 @@ function runSearch() {
       ui.resultsById = Object.fromEntries(res.map((t) => [t.id, t]));
     } catch {
       if (seq !== searchSeq) return;
-      ui.searchError = 'La recherche TMDB a échoué. Vérifie ta clé dans Profil.';
+      ui.searchError = 'La recherche a échoué. Réessaie dans un instant.';
     }
     const box = $('#results');
     if (box) box.innerHTML = resultsHTML();
