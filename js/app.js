@@ -3,6 +3,7 @@ import * as C from './catalog.js';
 import * as Auth from './auth.js';
 import { PLATFORMS, platform } from './platforms.js';
 import { icon, logo } from './icons.js';
+import { norm, similarity } from './fuzzy.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -190,6 +191,7 @@ function viewHome() {
       <p class="eyebrow">${hello}</p>
       <h1>On reprend où<br>tu t’étais arrêté.</h1>
     </header>
+    ${homeSearch()}
 
     ${Auth.enabled && !Auth.user() ? accountBanner() : ''}
     ${alerts.map(({ e, alert }) => alertCard(e, alert)).join('')}
@@ -226,6 +228,108 @@ const accountBanner = () => `<a class="account-banner" href="#/account/signup">
     <span><b>Crée ton compte Next Up</b><small>Tout le catalogue films et séries, et ta progression sur tous tes appareils.</small></span>
     ${icon('back', 'flip')}
   </a>`;
+
+const homeSearch = () => `<button class="home-search" data-action="openSearch">
+    ${icon('search')}<span>Rechercher une série, un film…</span></button>`;
+
+// ——— Recherche globale (loupe de la barre du haut, barre de l'accueil) ———
+const finder = { q: '', catalog: null, byId: {}, loading: false, seq: 0, timer: null, abort: null };
+
+function openFinder() {
+  const root = $('#finder');
+  root.hidden = false;
+  renderFinder();
+  requestAnimationFrame(() => root.classList.add('open'));
+  setTimeout(() => $('#finder-q')?.focus(), 60);
+}
+
+function closeFinder() {
+  const root = $('#finder');
+  root.classList.remove('open');
+  finder.abort?.abort();
+  setTimeout(() => { if (!root.classList.contains('open')) root.hidden = true; }, 200);
+}
+
+function finderLibrary(q) {
+  if (!q) return [];
+  return S.entries()
+    .map((e) => ({ e, s: Math.max(similarity(q, norm(e.title.name)), similarity(q, norm(e.title.original || ''))) }))
+    .filter((x) => x.s >= 0.5)
+    .sort((a, b) => b.s - a.s)
+    .slice(0, 8)
+    .map((x) => x.e);
+}
+
+function finderResults() {
+  const q = norm(finder.q);
+  if (!q) return `<p class="finder-hint">Tape le nom d’une série ou d’un film : tes titres d’abord, puis tout le catalogue pour en ajouter.</p>`;
+  const mine = finderLibrary(q);
+  const owned = new Set(S.entries().map((e) => e.id));
+  const catalog = (finder.catalog || []).filter((t) => !owned.has(t.id)).slice(0, 12);
+  const row = (t, attrs, sub) => `<button class="finder-row" ${attrs}>${poster(t, 'finder-poster')}
+      <span class="finder-info"><b>${esc(t.name)}</b><small>${sub}</small></span>${icon('back', 'flip')}</button>`;
+  return `${mine.length ? `<section><h3 class="label">Dans ta bibliothèque</h3>${mine.map((e) => {
+      const p = S.progress(e);
+      const sub = [STATUS[e.status], !p.movie && p.next && e.status !== 'planned' ? epLabel(p.next) : '', platform(e.platform).name].filter(Boolean).join(' · ');
+      return row(e.title, `data-action="finderOpen" data-id="${esc(e.id)}"`, esc(sub));
+    }).join('')}</section>` : ''}
+    <section><h3 class="label">Ajouter${C.live() ? '' : ' (catalogue de démo)'}</h3>
+      ${finder.loading && !finder.catalog ? '<div class="spinner"></div>'
+        : catalog.length ? catalog.map((t) => row(t, `data-action="finderAdd" data-id="${esc(t.id)}"`, `${t.type === 'movie' ? 'Film' : 'Série'}${t.year ? ` · ${t.year}` : ''}`)).join('')
+        : `<p class="finder-hint">Aucun autre titre trouvé. <button class="link" data-action="finderManual">Ajouter manuellement</button></p>`}
+    </section>`;
+}
+
+function renderFinder() {
+  const root = $('#finder');
+  if (!root.firstChild) {
+    root.innerHTML = `<div class="finder-bar">
+        ${icon('search')}
+        <input id="finder-q" type="search" placeholder="Série, film…" autocomplete="off" enterkeyhint="search" aria-label="Rechercher">
+        <button class="finder-close" data-action="closeFinder">Fermer</button>
+      </div>
+      <div class="finder-body" id="finder-body"></div>`;
+  }
+  $('#finder-q').value = finder.q;
+  $('#finder-body').innerHTML = finderResults();
+  $('#finder-body').classList.toggle('loading', finder.loading && Boolean(finder.catalog));
+}
+
+function runFinder() {
+  clearTimeout(finder.timer);
+  const q = finder.q.trim();
+  finder.abort?.abort();
+  if (!q) {
+    finder.catalog = null;
+    finder.loading = false;
+    renderFinder();
+    return;
+  }
+  const s = S.settings();
+  const cached = C.cachedSearch(q, s);
+  if (cached) {
+    Object.assign(finder, { catalog: cached, loading: false });
+    cached.forEach((t) => { finder.byId[t.id] = t; });
+    renderFinder();
+    return;
+  }
+  finder.loading = true;
+  renderFinder();
+  finder.timer = setTimeout(async () => {
+    const seq = ++finder.seq;
+    finder.abort = new AbortController();
+    try {
+      const res = await C.search(q, s, finder.abort.signal);
+      if (seq !== finder.seq) return;
+      res.forEach((t) => { finder.byId[t.id] = t; });
+      Object.assign(finder, { catalog: res, loading: false });
+    } catch (e) {
+      if (e.name === 'AbortError' || seq !== finder.seq) return;
+      Object.assign(finder, { catalog: [], loading: false });
+    }
+    renderFinder();
+  }, 150);
+}
 
 function resumeCard(e, p) {
   const t = e.title;
@@ -1137,6 +1241,11 @@ const actions = {
     if (Auth.user()) Auth.updateMeta({ subscriptions: next }).catch(() => toast('Abonnements enregistrés sur cet appareil seulement'));
   },
   manual() { openManualSheet(null); },
+  openSearch() { openFinder(); },
+  closeFinder() { closeFinder(); },
+  finderOpen({ id }) { closeFinder(); location.hash = `#/title/${encodeURIComponent(id)}`; },
+  finderAdd({ id }) { closeFinder(); openAddSheet(finder.byId[id]); },
+  finderManual() { closeFinder(); ui.query = finder.q; openManualSheet(null); },
   editCustom({ id }) { openManualSheet(S.get(id)); },
   mfType({ type }) { ui.sheet.form.type = type; renderSheet(); },
   mfEp({ i, d }) {
@@ -1225,6 +1334,11 @@ document.addEventListener('input', (ev) => {
   if (el.id === 'q') {
     ui.query = el.value;
     runSearch();
+    return;
+  }
+  if (el.id === 'finder-q') {
+    finder.q = el.value;
+    runFinder();
     return;
   }
   if (el.dataset.input === 'deleteConfirm' && ui.sheet?.mode === 'delete') {
@@ -1373,7 +1487,14 @@ document.addEventListener('submit', async (ev) => {
   }
 });
 
-document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape' && ui.sheet) closeSheet(); });
+document.addEventListener('keydown', (ev) => {
+  if (ev.key === 'Escape' && ui.sheet) closeSheet();
+  else if (ev.key === 'Escape' && !$('#finder').hidden) closeFinder();
+  else if (ev.key === '/' && !/input|textarea|select/i.test(ev.target.tagName) && !ui.sheet) {
+    ev.preventDefault();
+    openFinder();
+  }
+});
 
 // ——— Recherche ———
 

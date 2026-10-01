@@ -73,11 +73,17 @@
     </nav>
     <header class="topbar">
       <a class="topbar-brand" href="#/" aria-label="Next Up, accueil"><svg class="logo" viewBox="0 0 64 64" aria-hidden="true"><use href="#nu-logo"/></svg><span class="wordmark">Next <span>Up</span></span></a>
-      <a class="topbar-avatar" id="top-avatar" href="#/profile" aria-label="Profil"></a>
+      <div class="topbar-actions">
+        <button class="topbar-btn" data-action="openSearch" aria-label="Rechercher">
+          <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        </button>
+        <a class="topbar-avatar" id="top-avatar" href="#/profile" aria-label="Profil"></a>
+      </div>
     </header>
     <main id="view"></main>
   </div>
   <div id="sheet" class="sheet-root"></div>
+  <div id="finder" class="finder" hidden></div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script type="module" src="js/app.js"></script>
 </body>
