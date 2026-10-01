@@ -24,7 +24,7 @@ const movie = (slug, name, original, year, runtime, genres, providers, palette, 
 // Les plateformes indiquées ici sont des exemples pour la démo, pas des disponibilités réelles.
 export const DEMO = [
   tv('suits', 'Suits : Avocats sur mesure', 'Suits', 2011, [12, 16, 16, 16, 16, 16, 16, 16, 10], 43, true,
-    ['Drame', 'Juridique'], ['prime'], ['#1E3A8A', '#0B1020'],
+    ['Drame', 'Juridique'], ['netflix', 'prime'], ['#1E3A8A', '#0B1020'],
     'Un jeune surdoué sans diplôme se fait embaucher par le meilleur avocat de New York. Leur secret pourrait tout faire tomber.'),
   tv('breaking-bad', 'Breaking Bad', 'Breaking Bad', 2008, [7, 13, 13, 13, 16], 47, true,
     ['Drame', 'Crime'], ['netflix'], ['#3F6212', '#0C1406'],

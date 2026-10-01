@@ -150,6 +150,15 @@ function viewHome() {
   const hour = new Date().getHours();
   const hello = hour < 6 ? 'Bonne nuit' : hour < 18 ? 'Bonjour' : 'Bonsoir';
 
+  if (!list.length && Auth.enabled && !Auth.user()) {
+    return `<div class="welcome">
+        ${logo('big')}
+        <h1>Bienvenue sur Next Up</h1>
+        <p class="muted">Suis où tu en es dans tes séries et films, sur toutes tes plateformes. Connecte-toi pour retrouver ta bibliothèque.</p>
+        <a class="btn primary block" href="#/account/login">Se connecter</a>
+        <a class="btn block" href="#/account/signup">Créer un compte</a>
+      </div>`;
+  }
   if (!list.length) {
     return `<header class="page-head"><p class="eyebrow">${hello}</p><h1>Next Up</h1></header>
       <div class="empty">
@@ -615,7 +624,7 @@ function viewProfile() {
         <label class="btn">${icon('upload')} Importer<input type="file" accept="application/json" data-input="import" hidden></label>
       </div>
       <div class="btn-row">
-        ${S.syncing() ? '' : '<button class="btn ghost" data-action="resetDemo">Recharger la démo</button>'}
+        ${Auth.enabled ? '' : '<button class="btn ghost" data-action="resetDemo">Recharger la démo</button>'}
         <button class="btn ghost danger" data-action="clearAll">Tout effacer</button>
       </div>
     </section>
@@ -1523,7 +1532,7 @@ document.addEventListener('visibilitychange', () => {
 });
 
 async function boot() {
-  S.init();
+  S.init({ demo: !Auth.enabled });
   S.subscribe(render);
   render();
   try {

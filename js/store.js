@@ -11,7 +11,8 @@ const clone = (o) => JSON.parse(JSON.stringify(o));
 const epKey = (ep) => `${ep.s}:${ep.e}`;
 const DAY = 86400000;
 
-export function init() {
+// `demo` : remplir avec la bibliothèque de démonstration (uniquement quand l'app tourne sans comptes).
+export function init({ demo = true } = {}) {
   try {
     state = JSON.parse(localStorage.getItem(KEY));
   } catch {
@@ -19,13 +20,21 @@ export function init() {
   }
   if (!state) {
     state = emptyState();
-    seedDemo();
+    if (demo) seedDemo();
     persist();
   }
-  // Les titres de démo reprennent les données à jour du catalogue (ex. affiches ajoutées depuis).
   for (const entry of Object.values(state.entries)) {
-    if (demoById[entry.id]) entry.title = { ...entry.title, ...demoById[entry.id] };
+    if (!demoById[entry.id]) continue;
+    // App avec comptes : la démo n'a rien à faire dans la bibliothèque.
+    if (!demo) {
+      delete state.entries[entry.id];
+      continue;
+    }
+    // Les titres de démo reprennent les données à jour du catalogue (affiches, plateformes…).
+    entry.title = { ...entry.title, ...demoById[entry.id] };
+    entry.providers = demoById[entry.id].providers;
   }
+  persist();
 }
 
 const emptyState = () => ({ version: 1, entries: {}, settings: { region: 'BE' }, sync: null });
