@@ -19,6 +19,7 @@ const STATUS = {
 // État d'interface (non sauvegardé).
 const ui = {
   bumped: null,
+  editName: false,
   libFilter: 'all',
   season: {},
   editPlatform: false,
@@ -417,9 +418,25 @@ function accountCard() {
     </section>`;
   }
   const name = Auth.displayName();
+  if (ui.editName) {
+    return `<section class="card">
+      <form class="name-form" data-form="name">
+        <label class="field first"><span>Prénom</span>
+          <input name="name" value="${esc(name)}" autocomplete="given-name" maxlength="40" required></label>
+        <p class="form-error" hidden></p>
+        <div class="btn-row">
+          <button class="btn ghost" type="button" data-action="editName">Annuler</button>
+          <button class="btn primary" type="submit">Enregistrer</button>
+        </div>
+      </form>
+    </section>`;
+  }
   return `<section class="card account">
     <span class="avatar">${esc(name.slice(0, 1).toUpperCase())}</span>
-    <div class="account-info"><b>${esc(name)}</b><span class="muted">${esc(u.email)}</span>
+    <div class="account-info">
+      <span class="name-row"><b>${esc(name)}</b>
+        <button class="link small" data-action="editName">Modifier</button></span>
+      <span class="muted">${esc(u.email)}</span>
       <span class="hint ok">${icon('check')} Catalogue complet · bibliothèque synchronisée</span></div>
     <button class="btn small ghost" data-action="signOut">Déconnexion</button>
   </section>`;
@@ -659,6 +676,11 @@ const actions = {
     a.click();
     URL.revokeObjectURL(a.href);
   },
+  editName() {
+    ui.editName = !ui.editName;
+    render();
+    if (ui.editName) $('[data-form=name] input')?.select();
+  },
   async signOut() {
     if (confirm('Te déconnecter ? Ta bibliothèque reste sauvegardée dans ton compte.')) await Auth.signOut();
   },
@@ -705,6 +727,30 @@ document.addEventListener('change', (ev) => {
     el.files[0].text().then((txt) => {
       try { S.importData(txt); toast('Bibliothèque importée'); } catch { toast('Fichier invalide'); }
     });
+  }
+});
+
+document.addEventListener('submit', async (ev) => {
+  const form = ev.target;
+  if (form.dataset.form !== 'name') return;
+  ev.preventDefault();
+  const name = String(new FormData(form).get('name') || '').trim();
+  const error = form.querySelector('.form-error');
+  if (!name) {
+    error.textContent = 'Indique ton prénom.';
+    error.hidden = false;
+    return;
+  }
+  form.querySelector('[type=submit]').disabled = true;
+  try {
+    await Auth.updateName(name);
+    ui.editName = false;
+    render();
+    toast(`Prénom mis à jour · <b>${esc(name)}</b>`);
+  } catch (e) {
+    error.textContent = e.message;
+    error.hidden = false;
+    form.querySelector('[type=submit]').disabled = false;
   }
 });
 
@@ -830,6 +876,7 @@ function render() {
 window.addEventListener('hashchange', () => {
   const r = route();
   ui.editPlatform = false;
+  ui.editName = false;
   render();
   window.scrollTo(0, 0);
   if (r.name === 'add') {

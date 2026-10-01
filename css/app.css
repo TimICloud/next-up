@@ -478,6 +478,13 @@ p { margin: 0; }
 .avatar { display: grid; place-items: center; width: 52px; height: 52px; flex: none; border-radius: 50%; background: var(--grad); box-shadow: var(--glow); font: 800 22px var(--display); }
 .account-info { flex: 1; min-width: 0; display: grid; gap: 1px; }
 .account-info b { font-size: 17px; }
+.name-row { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+.name-row b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.link.small { margin: 0; font-size: 13px; }
+@media (max-width: 520px) {
+  .card.account { flex-wrap: wrap; }
+  .card.account > .btn { flex: 1 0 100%; }
+}
 .account-info .muted { font-size: 14px; overflow: hidden; text-overflow: ellipsis; }
 .account-info .hint { margin-top: 6px; font-size: 12px; }
 

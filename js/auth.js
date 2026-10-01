@@ -58,6 +58,13 @@ export async function resetPassword(email) {
   if (error) throw frenchError(error);
 }
 
+export async function updateName(name) {
+  const { data, error } = await client.auth.updateUser({ data: { name } });
+  if (error) throw frenchError(error);
+  // Même utilisateur : on met à jour la session sans déclencher de resynchronisation.
+  if (session) session = { ...session, user: data.user };
+}
+
 export async function signOut() {
   await client.auth.signOut();
 }
