@@ -34,7 +34,7 @@ Compte environ 20 minutes. Tout se fait dans le navigateur, sans rien installer.
 ## 4. Passerelle TMDB (le serveur qui garde ta clé)
 
 1. Menu **Edge Functions** → **Secrets** → ajoute :
-   - Nom : `TMDB_TOKEN`
+   - Nom : `TMDB_TOKEN` (le nom `TMDB-token` est aussi accepté)
    - Valeur : le jeton TMDB de l'étape 1
 2. **Edge Functions** → **Deploy a new function** → **Via Editor**.
 3. Nom de la fonction : `tmdb` (exactement).

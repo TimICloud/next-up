@@ -3,7 +3,7 @@
 // Seuls les utilisateurs connectés à un compte Next Up peuvent l'utiliser.
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
-const TMDB_TOKEN = Deno.env.get('TMDB_TOKEN') ?? '';
+const TMDB_TOKEN = (Deno.env.get('TMDB_TOKEN') ?? Deno.env.get('TMDB-token') ?? '').trim();
 const supabase = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_ANON_KEY') ?? '');
 
 // Uniquement les appels dont l'app a besoin.
