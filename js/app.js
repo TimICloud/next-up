@@ -1731,12 +1731,24 @@ boot();
 
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
   // Nouvelle version publiée : l'app se recharge une fois d'elle-même pour l'utiliser.
+  // On attend un moment calme (aucune saisie, aucune fenêtre ouverte) ou que l'app passe en arrière-plan.
   const hadController = Boolean(navigator.serviceWorker.controller);
-  let reloaded = false;
+  let pending = false;
+  const busy = () => ui.sheet || !$('#finder').hidden || /input|textarea|select/i.test(document.activeElement?.tagName || '');
+  const tryReload = () => {
+    if (!pending) return;
+    if (document.visibilityState === 'hidden' || !busy()) {
+      pending = false;
+      location.reload();
+    }
+  };
   navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (!hadController || reloaded) return;
-    reloaded = true;
-    location.reload();
+    if (!hadController) return;
+    pending = true;
+    tryReload();
   });
+  document.addEventListener('visibilitychange', tryReload);
+  document.addEventListener('focusout', () => setTimeout(tryReload, 300));
+  document.addEventListener('click', () => setTimeout(tryReload, 300));
   navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then((reg) => reg.update()).catch(() => {});
 }
