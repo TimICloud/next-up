@@ -387,6 +387,8 @@ p { margin: 0; }
 .watch-btn span { flex: 1; }
 .watch-btn em { font-style: normal; color: var(--warn); font-size: 13px; }
 .watch-btn > .ic:last-child { width: 16px; height: 16px; color: var(--muted); }
+.watch-sub { margin-top: 8px; color: var(--muted); font-size: 12px; line-height: 1.45; }
+.watch-sub a { color: #d8b4fe; }
 .chip-link { text-decoration: none; }
 .chip-link .pchip { transition: border-color 0.15s, background 0.15s; }
 .chip-link:hover .pchip { border-color: var(--line-2); background: rgba(255, 255, 255, 0.12); }

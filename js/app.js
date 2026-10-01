@@ -502,8 +502,21 @@ function watchButton(e) {
   const link = C.watchLink(e.title, e.platform);
   if (!link) return '';
   const pf = platform(e.platform);
-  return `<a class="watch-btn" href="${esc(link.url)}" target="_blank" rel="noopener" style="--pc:${pf.color}">
-    ${icon('play')}<span>Regarder sur <b>${esc(pf.name)}</b>${S.purchaseOnly(e) ? ' <em>(achat)</em>' : ''}</span>${icon('external')}</a>`;
+  const p = S.progress(e);
+  const ep = !p.movie && p.next && p.nextAired ? epLabel(p.next) : '';
+  const started = p.movie ? (e.minutes || 0) > 0 : p.watched > 0 || p.nextMinutes > 0;
+  const resume = C.resumeLink(e.title, e.platform);
+  const verb = started ? 'Reprendre' : 'Regarder';
+  const what = ep ? `<b>${ep}</b> ` : '';
+  const paid = S.purchaseOnly(e) ? ' <em>(achat)</em>' : '';
+  // Lecture directe (Netflix) ou fiche / recherche de la plateforme.
+  const main = `<a class="watch-btn" href="${esc(resume || link.url)}" target="_blank" rel="noopener" style="--pc:${pf.color}">
+    ${icon('play')}<span>${verb} ${what}sur <b>${esc(pf.name)}</b>${paid}</span>${icon('external')}</a>`;
+  let sub = '';
+  if (resume) sub = `Lance la lecture là où ton profil ${esc(pf.name)} s’est arrêté · <a href="${esc(link.url)}" target="_blank" rel="noopener">voir la fiche</a>`;
+  else if (!link.exact) sub = `Ouvre la recherche ${esc(pf.name)} « ${esc(e.title.original || e.title.name)} »${ep ? ` · épisode à reprendre : ${ep}` : ''}`;
+  else if (ep) sub = `Ouvre la fiche ${esc(pf.name)} · épisode à reprendre : ${ep}`;
+  return main + (sub ? `<p class="watch-sub">${sub}</p>` : '');
 }
 
 // Étiquette de plateforme cliquable (fiche, disponibilités).
