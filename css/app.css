@@ -534,6 +534,8 @@ p { margin: 0; }
 .danger-zone .btn { margin-top: 14px; }
 .btn.danger-solid { background: #e11d48; border-color: transparent; color: #fff; }
 .btn.danger-solid:disabled { opacity: 0.4; }
+.confirm-box { margin: 4px 0 18px; padding-right: 36px; }
+.confirm-box .muted { margin-top: 6px; font-size: 15px; }
 .delete-head { display: grid; justify-items: center; gap: 6px; margin-bottom: 18px; text-align: center; }
 .delete-head .muted { font-size: 14px; }
 .delete-icon { display: grid; place-items: center; width: 56px; height: 56px; border-radius: 18px; background: rgba(251, 113, 133, 0.15); color: var(--danger); }

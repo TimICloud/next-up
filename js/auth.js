@@ -109,6 +109,8 @@ export async function updateMeta(meta) {
   if (session) session = { ...session, user: data.user };
 }
 
+// Déconnexion : sur tous les appareils si possible, sinon (hors ligne…) au moins sur celui-ci.
 export async function signOut() {
-  await client.auth.signOut();
+  const { error } = await client.auth.signOut();
+  if (error) await client.auth.signOut({ scope: 'local' });
 }

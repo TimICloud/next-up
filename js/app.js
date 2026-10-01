@@ -748,7 +748,16 @@ function openPositionSheet(entry) {
   renderSheet();
 }
 
+// Confirmation dans le style de l'app (les fenêtres confirm() du navigateur sont bloquées dans certaines apps).
+function askConfirm({ title, text, confirm, danger = false }) {
+  return new Promise((resolve) => {
+    ui.sheet = { mode: 'confirm', title, text, confirm, danger, resolve };
+    renderSheet();
+  });
+}
+
 function closeSheet() {
+  ui.sheet?.resolve?.(false);
   const root = $('#sheet');
   root.classList.remove('open');
   ui.sheet = null;
@@ -826,6 +835,13 @@ function renderSheet() {
   const sh = ui.sheet;
   if (!sh) return;
   if (sh.mode === 'manual') return showSheet(root, manualForm(sh), sh.editId ? 'Modifier le titre' : 'Ajouter manuellement');
+  if (sh.mode === 'confirm') {
+    return showSheet(root, `<div class="confirm-box">
+        <h3 class="sheet-title">${esc(sh.title)}</h3>
+        <p class="muted">${esc(sh.text)}</p></div>
+      <button class="btn ${sh.danger ? 'danger-solid' : 'primary'} block" data-action="confirmYes">${esc(sh.confirm)}</button>
+      <button class="btn ghost block" data-action="closeSheet">Annuler</button>`, sh.title);
+  }
   if (sh.mode === 'with') {
     const used = S.entries().flatMap((x) => x.watchedWith || []);
     const options = [...new Set([...COMPANIONS.map(([n]) => n), ...used, ...sh.people])];
@@ -1096,10 +1112,25 @@ const actions = {
     if (ui.editName) $('[data-form=name] input')?.select();
   },
   async signOut() {
-    if (confirm('Te déconnecter ? Ta bibliothèque reste sauvegardée dans ton compte.')) await Auth.signOut();
+    const ok = await askConfirm({ title: 'Te déconnecter ?', text: 'Ta bibliothèque reste sauvegardée dans ton compte. Tu la retrouveras en te reconnectant.', confirm: 'Me déconnecter' });
+    if (!ok) return;
+    await Auth.signOut();
+    location.hash = '#/';
+    toast('Tu es déconnecté');
   },
-  resetDemo() { if (confirm('Remplacer ta bibliothèque par la démo ?')) { S.resetDemo(); toast('Démo rechargée'); } },
-  clearAll() { if (confirm('Effacer toute ta bibliothèque ? Cette action est définitive.')) { S.clearLibrary(); toast('Bibliothèque vidée'); } },
+  async resetDemo() {
+    if (await askConfirm({ title: 'Recharger la démo ?', text: 'Ta bibliothèque sur cet appareil sera remplacée par les titres de démonstration.', confirm: 'Recharger' })) {
+      S.resetDemo();
+      toast('Démo rechargée');
+    }
+  },
+  async clearAll() {
+    if (await askConfirm({ title: 'Tout effacer ?', text: 'Toute ta bibliothèque et ta progression seront effacées. Cette action est définitive.', confirm: 'Tout effacer', danger: true })) {
+      S.clearLibrary();
+      toast('Bibliothèque vidée');
+    }
+  },
+  confirmYes() { const r = ui.sheet.resolve; ui.sheet.resolve = null; closeSheet(); r?.(true); },
 };
 
 document.addEventListener('click', (ev) => {
