@@ -2,7 +2,7 @@ import * as S from './store.js';
 import * as C from './catalog.js';
 import * as Auth from './auth.js';
 import { PLATFORMS, platform } from './platforms.js';
-import { icon } from './icons.js';
+import { icon, logo } from './icons.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -132,7 +132,7 @@ function viewHome() {
 }
 
 const accountBanner = () => `<a class="account-banner" href="#/account/signup">
-    <span class="logo-mark">+1</span>
+    ${logo()}
     <span><b>Crée ton compte Next Up</b><small>Tout le catalogue films et séries, et ta progression sur tous tes appareils.</small></span>
     ${icon('back', 'flip')}
   </a>`;
@@ -226,13 +226,18 @@ function viewAdd() {
       ${icon('search')}
       <input id="q" type="search" placeholder="Suits, Dune, The Bear…" value="${esc(ui.query)}" autocomplete="off" enterkeyhint="search">
     </label>
-    <div id="results">${resultsHTML()}</div>`;
+    <div id="results">${resultsHTML()}</div>
+    <button class="manual-cta" data-action="manual">
+      <span class="manual-icon">${icon('plus')}</span>
+      <span><b>Ajouter manuellement</b><small>Un titre introuvable ? Crée-le toi-même : nom, saisons, épisodes.</small></span>
+      ${icon('back', 'flip')}
+    </button>`;
 }
 
 function resultsHTML() {
   if (ui.searchError) return `<p class="muted pad">${esc(ui.searchError)}</p>`;
   if (!ui.results) return `<div class="spinner"></div>`;
-  if (!ui.results.length) return `<p class="muted pad">Aucun résultat pour « ${esc(ui.query)} ».</p>`;
+  if (!ui.results.length) return `<p class="muted pad">Aucun résultat pour « ${esc(ui.query)} ». Tu peux l’ajouter manuellement ci-dessous.</p>`;
   return `${ui.query ? '' : '<h2 class="sub-title">Suggestions</h2>'}
     <div class="grid">${ui.results.map((t) => `
       <button class="tile result" data-action="pick" data-id="${esc(t.id)}">
@@ -260,6 +265,7 @@ function viewTitle(id) {
         <span class="status s-${e.status}">${STATUS[e.status]}</span>
         <h1>${esc(t.name)}</h1>
         <p class="muted">${facts.map(esc).join(' · ')}</p>
+        ${t.source === 'custom' ? `<button class="link small left" data-action="editCustom" data-id="${esc(e.id)}">Ajouté manuellement · Modifier</button>` : ''}
       </div>
     </div>
     ${t.overview ? `<p class="overview">${esc(t.overview)}</p>` : ''}
@@ -323,10 +329,10 @@ function platformCard(e) {
       <p class="hint">Changer de plateforme ne modifie pas ta progression.</p>` : ''}
     ${history.length > 1 ? `<ol class="timeline">${history.map((h) =>
       `<li><i style="--pc:${platform(h.platform).color}"></i><b>${esc(platform(h.platform).name)}</b><span>depuis le ${date(h.at)}</span></li>`).join('')}</ol>` : ''}
-    <div class="avail"><span class="label">Disponible en ${esc(S.settings().region)}${e.title.source === 'demo' ? ' (démo)' : ''}</span>
+    ${e.title.source === 'custom' ? '' : `<div class="avail"><span class="label">Disponible en ${esc(S.settings().region)}${e.title.source === 'demo' ? ' (démo)' : ''}</span>
       ${avail == null ? `<p class="muted">${C.live() ? 'Recherche…' : 'Disponible avec un compte Next Up.'}</p>`
         : avail.length ? `<div class="chips">${avail.map(chip).join('')}</div>` : '<p class="muted">Aucune plateforme d’abonnement trouvée.</p>'}
-    </div>
+    </div>`}
   </section>`;
 }
 
@@ -459,7 +465,7 @@ function viewAccount(mode) {
   const sub = signup ? 'Gratuit, en 30 secondes.' : reset ? 'Indique ton e-mail, on t’envoie un lien pour choisir un nouveau mot de passe.' : 'Connecte-toi pour retrouver ta bibliothèque.';
   return `<div class="auth">
     <button class="icon-btn" data-action="back" aria-label="Retour">${icon('back')}</button>
-    <div class="auth-head"><span class="logo-mark big">+1</span><h1>${title}</h1><p class="muted">${sub}</p></div>
+    <div class="auth-head">${logo('big')}<h1>${title}</h1><p class="muted">${sub}</p></div>
     ${notice ? `<p class="notice">${esc(notice)}</p>` : ''}
     ${reset ? '' : `<div class="seg auth-tabs">
       <a href="#/account/signup" class="${signup ? 'on' : ''}">Créer un compte</a>
@@ -533,10 +539,59 @@ function positionPicker(sh) {
     <p class="hint">${sh.s === seasons[0].n && sh.e === 1 ? 'Tu commences au tout début.' : `Les épisodes avant ${epLabel(sh)} seront marqués comme vus.`}</p>`;
 }
 
+function openManualSheet(entry) {
+  const t = entry?.title;
+  ui.sheet = {
+    mode: 'manual',
+    editId: entry?.id || null,
+    form: {
+      type: t?.type || 'tv',
+      name: t?.name || ui.query.trim(),
+      year: t?.year || '',
+      seasons: t?.seasons?.map((s) => s.count) || [10],
+      ended: Boolean(t?.ended),
+      runtime: t?.runtime || '',
+    },
+  };
+  renderSheet();
+  setTimeout(() => $('[data-mf=name]')?.focus(), 350);
+}
+
+function manualForm(sh) {
+  const f = sh.form;
+  const tv = f.type === 'tv';
+  return `<h3 class="sheet-title">${sh.editId ? 'Modifier le titre' : 'Ajouter manuellement'}</h3>
+    <p class="muted">${sh.editId ? 'Ta progression est conservée.' : 'Pour un titre absent du catalogue.'}</p>
+    <div class="sheet-sec"><h4>Type</h4>
+      <div class="seg">${[['tv', 'Série'], ['movie', 'Film']].map(([k, l]) =>
+        `<button class="${f.type === k ? 'on' : ''}" data-action="mfType" data-type="${k}" ${sh.editId ? 'disabled' : ''}>${l}</button>`).join('')}</div>
+    </div>
+    <div class="mf-grid">
+      <label class="field"><span>Titre</span><input data-mf="name" value="${esc(f.name)}" maxlength="80" placeholder="${tv ? 'Ma série' : 'Mon film'}" autocomplete="off"></label>
+      <label class="field mf-year"><span>Année</span><input data-mf="year" value="${esc(f.year)}" inputmode="numeric" maxlength="4" placeholder="2024"></label>
+    </div>
+    ${tv ? `<div class="sheet-sec"><h4>Saisons et épisodes</h4>
+      <div class="mf-seasons">${f.seasons.map((count, i) => `<div class="mf-season">
+        <span>Saison ${i + 1}</span>
+        <div class="stepper-ctl">
+          <button data-action="mfEp" data-i="${i}" data-d="-1" aria-label="Moins d’épisodes">${icon('minus')}</button>
+          <b>${count}</b><small>ép.</small>
+          <button data-action="mfEp" data-i="${i}" data-d="1" aria-label="Plus d’épisodes">${icon('plus')}</button>
+        </div>
+        ${f.seasons.length > 1 && i === f.seasons.length - 1 ? `<button class="icon-btn mf-remove" data-action="mfRemoveSeason" aria-label="Retirer la saison">${icon('x')}</button>` : '<span class="mf-remove"></span>'}
+      </div>`).join('')}</div>
+      <button class="btn ghost small mf-add" data-action="mfAddSeason">${icon('plus')} Ajouter une saison</button>
+      <label class="toggle"><input type="checkbox" data-mf="ended" ${f.ended ? 'checked' : ''}><span></span>Série terminée (plus de nouvelle saison)</label>
+    </div>` : `<label class="field"><span>Durée (minutes)</span><input data-mf="runtime" value="${esc(f.runtime)}" inputmode="numeric" maxlength="3" placeholder="120"></label>`}
+    <p class="form-error" hidden></p>
+    <button class="btn primary block" data-action="mfSubmit">${sh.editId ? 'Enregistrer' : 'Continuer'}</button>`;
+}
+
 function renderSheet() {
   const root = $('#sheet');
   const sh = ui.sheet;
   if (!sh) return;
+  if (sh.mode === 'manual') return showSheet(root, manualForm(sh), sh.editId ? 'Modifier le titre' : 'Ajouter manuellement');
   const t = sh.title;
   let body;
 
@@ -567,12 +622,18 @@ function renderSheet() {
       <button class="btn primary block" data-action="sheetSave" ${sh.loading ? 'disabled' : ''}>Ajouter à ma bibliothèque</button>`;
   }
 
+  showSheet(root, body, t.name);
+}
+
+function showSheet(root, body, label) {
+  const scroll = root.querySelector('.sheet')?.scrollTop || 0;
   root.innerHTML = `<div class="sheet-backdrop" data-action="closeSheet"></div>
-    <div class="sheet" role="dialog" aria-modal="true" aria-label="${esc(t.name)}">
+    <div class="sheet" role="dialog" aria-modal="true" aria-label="${esc(label)}">
       <div class="grab"></div>
       <button class="icon-btn sheet-close" data-action="closeSheet" aria-label="Fermer">${icon('x')}</button>
       ${body}
     </div>`;
+  root.querySelector('.sheet').scrollTop = scroll;
   requestAnimationFrame(() => root.classList.add('open'));
 }
 
@@ -676,6 +737,51 @@ const actions = {
     a.click();
     URL.revokeObjectURL(a.href);
   },
+  manual() { openManualSheet(null); },
+  editCustom({ id }) { openManualSheet(S.get(id)); },
+  mfType({ type }) { ui.sheet.form.type = type; renderSheet(); },
+  mfEp({ i, d }) {
+    const s = ui.sheet.form.seasons;
+    s[i] = Math.min(Math.max(s[i] + +d, 1), 99);
+    renderSheet();
+  },
+  mfAddSeason() {
+    const s = ui.sheet.form.seasons;
+    s.push(s[s.length - 1] || 10);
+    renderSheet();
+  },
+  mfRemoveSeason() { ui.sheet.form.seasons.pop(); renderSheet(); },
+  mfSubmit() {
+    const sh = ui.sheet;
+    const f = sh.form;
+    const name = f.name.trim();
+    const error = $('.sheet .form-error');
+    if (!name) {
+      error.textContent = 'Indique le titre.';
+      error.hidden = false;
+      return;
+    }
+    const year = parseInt(f.year, 10);
+    const patch = {
+      name, original: name,
+      year: year >= 1888 && year <= 2100 ? year : null,
+      palette: C.paletteFor(name),
+    };
+    if (f.type === 'tv') {
+      patch.seasons = f.seasons.map((count, i) => ({ n: i + 1, count }));
+      patch.ended = f.ended;
+    } else {
+      patch.runtime = parseInt(f.runtime, 10) || null;
+    }
+    if (sh.editId) {
+      S.editTitle(sh.editId, patch);
+      closeSheet();
+      toast(`<b>${esc(name)}</b> mis à jour`);
+      return;
+    }
+    const id = `custom-${f.type}-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+    openAddSheet({ id, source: 'custom', type: f.type, overview: '', genres: [], ...patch });
+  },
   editName() {
     ui.editName = !ui.editName;
     render();
@@ -705,6 +811,10 @@ document.addEventListener('input', (ev) => {
   if (el.id === 'q') {
     ui.query = el.value;
     runSearch();
+    return;
+  }
+  if (el.dataset.mf && ui.sheet?.form) {
+    ui.sheet.form[el.dataset.mf] = el.type === 'checkbox' ? el.checked : el.value;
     return;
   }
   const kind = el.dataset.input;

@@ -23,3 +23,13 @@ const PATHS = {
 
 export const icon = (name, cls = '') =>
   `<svg class="ic ${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${PATHS[name]}</svg>`;
+
+// Logo Next Up : le symbole « épisode suivant » (▶|) dans le carré dégradé de l'app.
+export const LOGO_SVG = `<svg class="logo" viewBox="0 0 64 64" aria-hidden="true">
+  <defs><linearGradient id="nu-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#a855f7"/><stop offset="1" stop-color="#ec4899"/></linearGradient></defs>
+  <rect class="logo-bg" width="64" height="64" rx="18" fill="url(#nu-grad)"/>
+  <path class="logo-play" d="M19.5 20 36.5 32 19.5 44Z" fill="#fff" stroke="#fff" stroke-width="6" stroke-linejoin="round"/>
+  <rect class="logo-bar" x="41.5" y="17" width="6" height="30" rx="3" fill="#fff"/>
+</svg>`;
+
+export const logo = (cls = '') => LOGO_SVG.replace('class="logo"', `class="logo ${cls}"`);

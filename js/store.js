@@ -255,6 +255,17 @@ export function add(title, { platform, status, next, minutes }) {
   commit();
 }
 
+// Modification d'un titre ajouté manuellement (nom, saisons…). Les épisodes vus qui n'existent plus sont retirés.
+export function editTitle(id, patch) {
+  const entry = state.entries[id];
+  entry.title = { ...entry.title, ...patch };
+  const valid = new Set(episodes(entry.title).map(epKey));
+  entry.watched = entry.watched.filter((k) => valid.has(k));
+  syncCompletion(entry);
+  touch(entry);
+  commit();
+}
+
 export function updateTitle(id, title) {
   const entry = state.entries[id];
   if (!entry) return;
