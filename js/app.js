@@ -34,7 +34,8 @@ const ui = {
 // ——— Petits composants ———
 
 function poster(t, cls = '') {
-  if (t.poster) return `<div class="poster ${cls}"><img src="${C.img(t.poster, 'w342')}" alt="" loading="lazy"></div>`;
+  const src = C.posterSrc(t);
+  if (src) return `<div class="poster ${cls}"><img src="${src}" alt="" loading="lazy"></div>`;
   const [a, b] = t.palette || C.paletteFor(t.name);
   return `<div class="poster gen ${cls}" style="--a:${a};--b:${b}">
     <span class="gen-type">${t.type === 'movie' ? 'Film' : 'Série'}</span>
@@ -44,7 +45,8 @@ function poster(t, cls = '') {
 
 function backdrop(t) {
   if (t.backdrop) return `<img class="bd-img" src="${C.img(t.backdrop, 'w780')}" alt="" loading="lazy">`;
-  if (t.poster) return `<img class="bd-img blur" src="${C.img(t.poster, 'w342')}" alt="" loading="lazy">`;
+  const src = C.posterSrc(t);
+  if (src) return `<img class="bd-img blur" src="${src}" alt="" loading="lazy">`;
   const [a, b] = t.palette || C.paletteFor(t.name);
   return `<div class="bd-gen" style="--a:${a};--b:${b}"><span>${esc(t.original || t.name)}</span></div>`;
 }
@@ -129,6 +131,7 @@ function resumeCard(e, p) {
   const t = e.title;
   return `<article class="rcard" data-go="#/title/${encodeURIComponent(e.id)}">
     <div class="rcard-bg">${backdrop(t)}</div>
+    ${poster(t, 'rcard-poster')}
     <div class="rcard-body">
       <div class="rcard-top">${chip(e.platform)}${t.type === 'movie' ? '<span class="tag">Film</span>' : ''}</div>
       <h3>${esc(t.name)}</h3>

@@ -80,7 +80,32 @@ export const DEMO = [
     'Emprisonné à tort le jour de son mariage, Edmond Dantès s’évade et prépare une vengeance implacable.'),
 ];
 
+// Affiches de la démo, hébergées par Wikipédia (images non libres, réduites, à usage d'illustration).
+// Severance, Mercredi, Lupin et Ted Lasso n'ont qu'un logo sur Wikipédia : ils gardent une affiche générée.
+const WIKI = 'https://upload.wikimedia.org/wikipedia/en';
+const COVERS = {
+  'demo-tv-suits': '/2/2c/SuitsSeasn1DVDCover.jpg',
+  'demo-tv-breaking-bad': '/6/61/BreakingBadS1DVD.jpg',
+  'demo-tv-stranger-things': '/b/b1/Stranger_Things_season_1.jpg',
+  'demo-tv-the-bear': '/7/74/The_Bear_2022_FX.png',
+  'demo-tv-the-last-of-us': '/3/3e/The_Last_of_Us_season_1_Blu-ray.png',
+  'demo-tv-the-mandalorian': '/0/04/The_Mandalorian_season_1_poster.jpg',
+  'demo-tv-got': '/e/e8/Game_of_Thrones_Season_1.jpg',
+  'demo-tv-friends': '/1/1c/Friends_Season_1_DVD.jpg',
+  'demo-movie-dune-2': '/5/52/Dune_Part_Two_poster.jpeg',
+  'demo-movie-oppenheimer': '/4/4a/Oppenheimer_%28film%29.jpg',
+  'demo-movie-top-gun-maverick': '/1/13/Top_Gun_Maverick_Poster.jpg',
+  'demo-movie-inception': '/2/2e/Inception_%282010%29_theatrical_poster.jpg',
+  'demo-movie-interstellar': '/b/bc/Interstellar_film_poster.jpg',
+  'demo-movie-barbie': '/0/0b/Barbie_2023_poster.jpg',
+  'demo-movie-monte-cristo': '/d/d0/Le_Comte_de_Monte-Cristo_2024_film_poster.jpg',
+};
+for (const t of DEMO) if (COVERS[t.id]) t.posterUrl = WIKI + COVERS[t.id];
+
 export const demoById = Object.fromEntries(DEMO.map((t) => [t.id, t]));
+
+// Adresse de l'affiche d'un titre, quelle que soit sa source.
+export const posterSrc = (t, size = 'w342') => t.posterUrl || (t.poster ? img(t.poster, size) : null);
 
 const norm = (s) => (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 

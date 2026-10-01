@@ -22,6 +22,10 @@ export function init() {
     seedDemo();
     persist();
   }
+  // Les titres de démo reprennent les données à jour du catalogue (ex. affiches ajoutées depuis).
+  for (const entry of Object.values(state.entries)) {
+    if (demoById[entry.id]) entry.title = { ...entry.title, ...demoById[entry.id] };
+  }
 }
 
 const emptyState = () => ({ version: 1, entries: {}, settings: { tmdbKey: '', region: 'BE' } });
