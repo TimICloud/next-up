@@ -373,6 +373,24 @@ p { margin: 0; }
 .card-title h3 { font-size: 17px; }
 .card > .muted { font-size: 14px; }
 
+/* Cartes de la fiche : en-tête, espacements et fonds identiques */
+.detail .card { margin-bottom: 12px; }
+.card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 34px; margin-bottom: 12px; }
+.card-head .label { margin: 0; font-family: var(--font); letter-spacing: 0.05em; }
+.dcard .chips { gap: 8px; }
+.dcard .avail-kind:first-child { margin-top: 0; }
+.dcard .hint { margin-top: 12px; }
+.dcard .pick-grid { margin-top: 14px; }
+.dcard .timeline { margin-top: 14px; }
+.dcard .seg { margin-top: 0; }
+.eps-card .season-tabs { margin: 0 -18px 12px; padding: 0 18px 4px; }
+.eps-card .stab { background: var(--bg-2); }
+.eps-card .stab.on { background: var(--surface-2); }
+.eps-card .ep { background: var(--bg-2); }
+.eps-card .ep.on { background: rgba(168, 85, 247, 0.1); }
+.eps-card .ep-n { background: var(--surface-2); }
+.eps-card .season-avail { background: var(--bg-2); }
+.remove-btn { margin-top: 4px; }
 .progress-card {
   background:
     radial-gradient(100% 140% at 100% 0%, rgba(168, 85, 247, 0.16), transparent 60%),
@@ -389,7 +407,7 @@ p { margin: 0; }
 .ep-minutes-head .muted { font-size: 12px; }
 .link { margin-top: 12px; color: #d8b4fe; font-size: 14px; font-weight: 600; text-decoration: underline; text-decoration-color: rgba(216, 180, 254, 0.35); text-underline-offset: 3px; }
 .link:hover { color: var(--text); }
-.platform-now .pchip { padding: 6px 12px 6px 10px; font-size: 14px; }
+.platform-now .pchip { padding: 6px 12px 6px 10px; font-size: 13px; }
 
 .timeline { margin: 16px 0 0; padding: 0 0 0 4px; list-style: none; border-left: 1px dashed var(--line-2); }
 .timeline li { position: relative; display: flex; align-items: center; gap: 8px; padding: 4px 0 4px 14px; font-size: 13px; }
@@ -628,7 +646,8 @@ p { margin: 0; }
   font-size: 14px; font-weight: 600; transition: all 0.15s;
 }
 .with-chip > span { font-size: 15px; line-height: 1; }
-.with-chip.static { padding: 6px 12px 6px 9px; font-size: 13px; background: rgba(255, 255, 255, 0.06); }
+.with-chip.static { padding: 6px 12px 6px 9px; font-size: 13px; font-weight: 600; background: rgba(255, 255, 255, 0.08); border-color: rgba(255, 255, 255, 0.08); }
+.dcard .pchip { padding: 6px 12px 6px 10px; font-size: 13px; }
 .with-chip.alone { color: var(--muted); }
 .with-chip.on { background: linear-gradient(var(--surface-2), var(--surface-2)) padding-box, var(--grad) border-box; border-color: transparent; }
 .with-grid { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0; }

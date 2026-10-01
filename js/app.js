@@ -428,14 +428,10 @@ function viewTitle(id) {
     ${t.type === 'tv' ? progressCardTV(e, p) : progressCardMovie(e, p)}
     ${withCard(e)}
     ${platformCard(e)}
+    ${availCard(e)}
+    ${statusCard(e)}
     ${t.type === 'tv' ? episodesSection(e, p) : ''}
-
-    <section class="card">
-      <span class="label">Statut</span>
-      <div class="seg">${Object.entries(STATUS).map(([k, label]) =>
-        `<button class="${e.status === k ? 'on' : ''}" data-action="status" data-id="${esc(e.id)}" data-status="${k}">${label}</button>`).join('')}</div>
-    </section>
-    <button class="btn ghost danger block" data-action="remove" data-id="${esc(e.id)}">${icon('trash')} Retirer de ma bibliothèque</button>
+    <button class="btn ghost danger block remove-btn" data-action="remove" data-id="${esc(e.id)}">${icon('trash')} Retirer de ma bibliothèque</button>
   </div>`;
 }
 
@@ -484,45 +480,57 @@ function progressCardMovie(e, p) {
   </section>`;
 }
 
+// Carte de la fiche d'un titre : même en-tête partout (nom à gauche, action à droite).
+const detailCard = (label, body, { action = '', cls = '' } = {}) => `<section class="card dcard ${cls}">
+    <header class="card-head"><h3 class="label">${label}</h3>${action}</header>
+    ${body}
+  </section>`;
+const cardButton = (text, attrs) => `<button class="btn small ghost" ${attrs}>${text}</button>`;
+
 function withCard(e) {
   const people = e.watchedWith || [];
-  return `<section class="card with-card">
-    <div class="card-row">
-      <div><span class="label">Regardé avec</span>
-        <div class="chips">${people.length ? people.map(withChip).join('') : '<span class="with-chip static alone"><span>🙋</span>Juste moi</span>'}</div></div>
-      <button class="btn small ghost" data-action="editWith" data-id="${esc(e.id)}">Modifier</button>
-    </div>
-  </section>`;
+  return detailCard('Regardé avec',
+    `<div class="chips">${people.length ? people.map(withChip).join('') : '<span class="with-chip static alone"><span>🙋</span>Juste moi</span>'}</div>`,
+    { action: cardButton('Modifier', `data-action="editWith" data-id="${esc(e.id)}"`) });
 }
 
 function platformCard(e) {
   const history = e.platformHistory || [];
   const date = (ts) => new Date(ts).toLocaleDateString('fr-BE', { day: 'numeric', month: 'short', year: 'numeric' });
   const avail = e.providers;
-  return `<section class="card">
-    <div class="card-row">
-      <div><span class="label">Regardé sur</span><div class="platform-now">${chip(e.platform)}</div></div>
-      <button class="btn small ghost" data-action="editPlatform">${ui.editPlatform ? 'Fermer' : 'Changer'}</button>
-    </div>
+  return detailCard('Regardé sur', `
+    <div class="platform-now">${chip(e.platform)}</div>
     ${ui.editPlatform ? `<div class="pick-grid">${PLATFORMS.map((pl) =>
-      `<button class="pick ${pl.id === e.platform ? 'on' : ''}" style="--pc:${pl.color}" data-action="setPlatform" data-id="${esc(e.id)}" data-p="${pl.id}"><i></i>${esc(pl.name)}${avail?.includes(pl.id) ? '<small>dispo</small>' : ''}</button>`).join('')}</div>
+      `<button class="pick ${pl.id === e.platform ? 'on' : ''}" style="--pc:${pl.color}" data-action="setPlatform" data-id="${esc(e.id)}" data-p="${pl.id}"><i></i>${esc(pl.name)}${avail?.includes(pl.id) ? '<small>inclus</small>' : e.paidProviders?.includes(pl.id) ? '<small class="paid">achat</small>' : ''}</button>`).join('')}</div>
       <p class="hint">Changer de plateforme ne modifie pas ta progression.</p>` : ''}
     ${history.length > 1 ? `<ol class="timeline">${history.map((h) =>
-      `<li><i style="--pc:${platform(h.platform).color}"></i><b>${esc(platform(h.platform).name)}</b><span>depuis le ${date(h.at)}</span></li>`).join('')}</ol>` : ''}
-    ${e.title.source === 'custom' ? '' : `<div class="avail"><span class="label">Disponible en ${esc(S.settings().region)}${e.title.source === 'demo' ? ' (démo)' : ''}</span>
-      ${avail == null ? `<p class="muted">${C.live() ? 'Recherche…' : 'Disponible avec un compte Next Up.'}</p>`
-        : `${avail.length ? `<p class="avail-kind">Inclus dans l’abonnement</p>
-          <div class="chips">${avail.map((id) => subscriptions().includes(id) ? chip(id).replace('</span>', ` ${icon('check', 'mine')}</span>`) : chip(id)).join('')}</div>`
-          : '<p class="muted">Inclus dans aucun abonnement pour l’instant.</p>'}
-          ${Object.values(e.seasonAvail || {}).some((a) => a.paid.includes(e.platform) && !a.included.includes(e.platform)) && avail.includes(e.platform)
-            ? `<p class="hint warn">Attention : sur ${esc(platform(e.platform).name)}, certaines saisons ne sont qu’à l’achat. Détail par saison dans « Épisodes ».</p>` : ''}
-          ${e.paidProviders?.length ? `<p class="avail-kind">À l’achat ou en location</p>
-          <div class="chips">${e.paidProviders.map((id) => chip(id).replace('</span>', ' <em class="paid">€</em></span>')).join('')}</div>` : ''}
-          ${subscriptions().length ? `<p class="hint">${avail.some((id) => subscriptions().includes(id)) ? `${icon('check')} Inclus dans tes abonnements`
-            : e.paidProviders?.some((id) => subscriptions().includes(id)) ? 'Sur tes plateformes, mais seulement à l’achat ou en location (en plus de l’abonnement).'
-            : 'Pas inclus dans tes abonnements.'}</p>` : ''}`}
-    </div>`}
-  </section>`;
+      `<li><i style="--pc:${platform(h.platform).color}"></i><b>${esc(platform(h.platform).name)}</b><span>depuis le ${date(h.at)}</span></li>`).join('')}</ol>` : ''}`,
+  { action: cardButton(ui.editPlatform ? 'Fermer' : 'Changer', 'data-action="editPlatform"') });
+}
+
+function availCard(e) {
+  if (e.title.source === 'custom') return '';
+  const avail = e.providers;
+  const subs = subscriptions();
+  const label = `Disponible en ${esc(S.settings().region)}${e.title.source === 'demo' ? ' (démo)' : ''}`;
+  if (avail == null) return detailCard(label, `<p class="muted">${C.live() ? 'Recherche…' : 'Disponible avec un compte Next Up.'}</p>`);
+  const mixedSeasons = avail.includes(e.platform)
+    && Object.values(e.seasonAvail || {}).some((a) => a.paid.includes(e.platform) && !a.included.includes(e.platform));
+  return detailCard(label, `
+    ${avail.length ? `<p class="avail-kind">Inclus dans l’abonnement</p>
+      <div class="chips">${avail.map((id) => subs.includes(id) ? chip(id).replace('</span>', ` ${icon('check', 'mine')}</span>`) : chip(id)).join('')}</div>`
+      : '<p class="muted">Inclus dans aucun abonnement pour l’instant.</p>'}
+    ${e.paidProviders?.length ? `<p class="avail-kind">À l’achat ou en location</p>
+      <div class="chips">${e.paidProviders.map((id) => chip(id).replace('</span>', ' <em class="paid">€</em></span>')).join('')}</div>` : ''}
+    ${mixedSeasons ? `<p class="hint warn">Sur ${esc(platform(e.platform).name)}, certaines saisons ne sont qu’à l’achat : détail par saison dans « Épisodes ».</p>` : ''}
+    ${subs.length ? `<p class="hint">${avail.some((id) => subs.includes(id)) ? `${icon('check')} Inclus dans tes abonnements`
+      : e.paidProviders?.some((id) => subs.includes(id)) ? 'Sur tes plateformes, mais seulement à l’achat ou en location (en plus de l’abonnement).'
+      : 'Pas inclus dans tes abonnements.'}</p>` : ''}`);
+}
+
+function statusCard(e) {
+  return detailCard('Statut', `<div class="seg">${Object.entries(STATUS).map(([k, label]) =>
+    `<button class="${e.status === k ? 'on' : ''}" data-action="status" data-id="${esc(e.id)}" data-status="${k}">${label}</button>`).join('')}</div>`);
 }
 
 // Où regarder la saison affichée, sur la plateforme choisie et ailleurs.
@@ -552,8 +560,7 @@ function episodesSection(e, p) {
   const seenIn = (s) => e.watched.filter((k) => k.startsWith(`${s.n}:`)).length;
   const allSeen = seenIn(season) === season.count;
 
-  return `<section class="block">
-    <div class="block-head"><h2>Épisodes</h2></div>
+  return detailCard('Épisodes', `
     <div class="season-tabs">${seasons.map((s) => {
       const pct = seenIn(s) / s.count;
       const st = S.seasonStatus(e, s.n);
@@ -576,8 +583,7 @@ function episodesSection(e, p) {
         <span class="ep-t">${names?.[n] ? esc(names[n]) : `Épisode ${n}`}</span>
         <span class="ep-c">${on ? icon('check') : isNext ? `<em>${p.nextMinutes ? `${p.nextMinutes} min` : 'Prochain'}</em>` : aired ? '' : '<em>À venir</em>'}</span>
       </button>`;
-    }).join('')}</div>
-  </section>`;
+    }).join('')}</div>`, { cls: 'eps-card' });
 }
 
 function viewProfile() {
