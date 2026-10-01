@@ -268,13 +268,6 @@ export function watchLink(title, platformId) {
   return search ? { url: search(encodeURIComponent(title.original || title.name)), exact: false } : null;
 }
 
-// Lecture directe là où le profil s'est arrêté. Netflix ne publie pas les identifiants d'épisodes,
-// mais /watch/<identifiant de la série> reprend la série à l'épisode (et la minute) en cours du profil.
-export function resumeLink(title, platformId) {
-  const id = platformId === 'netflix' && /netflix\.com\/title\/(\d+)/.exec(title.watchLinks?.netflix || '')?.[1];
-  return id ? `https://www.netflix.com/watch/${id}` : null;
-}
-
 export async function seasonEpisodes(title, season) {
   if (title.source !== 'tmdb' || !live()) return null;
   const d = await call(`/tv/${title.tmdbId}/season/${season}`);
