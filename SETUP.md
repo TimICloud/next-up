@@ -66,3 +66,12 @@ export const SUPABASE_ANON_KEY = 'ta-clé-anon';
 ```
 
 C'est tout : l'app affiche alors « Crée ton compte Next Up », et une fois connecté, la recherche porte sur tout le catalogue.
+
+## 7. Mise en ligne (GitHub Pages)
+
+- Dépôt public : https://github.com/TimICloud/next-up (branche `main`, dossier racine).
+- Adresse de l'app : **https://timicloud.github.io/next-up/** — chaque `git push` sur `main` republie le site en ~1 minute.
+- Supabase → Authentication → URL Configuration :
+  Site URL `https://timicloud.github.io/next-up/`, Redirect URLs `https://timicloud.github.io/next-up/**`
+  (+ `http://localhost:8770/**` et `http://192.168.1.7:8770/**` pour les tests en local).
+- Pense à changer `CACHE` dans `sw.js` à chaque version pour que les téléphones récupèrent la mise à jour.
