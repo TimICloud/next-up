@@ -230,7 +230,7 @@ const accountBanner = () => `<a class="account-banner" href="#/account/signup">
   </a>`;
 
 const homeSearch = () => `<button class="home-search" data-action="openSearch">
-    ${icon('search')}<span>Rechercher une série, un film…</span></button>`;
+    ${icon('search')}<span>Titre, acteur, thème…</span></button>`;
 
 // ——— Recherche globale (loupe de la barre du haut, barre de l'accueil) ———
 const finder = { q: '', catalog: null, byId: {}, loading: false, seq: 0, timer: null, abort: null };
@@ -262,7 +262,7 @@ function finderLibrary(q) {
 
 function finderResults() {
   const q = norm(finder.q);
-  if (!q) return `<p class="finder-hint">Tape le nom d’une série ou d’un film : tes titres d’abord, puis tout le catalogue pour en ajouter.</p>`;
+  if (!q) return `<p class="finder-hint">Tape un titre, un acteur ou un thème (« zombie », « mafia »…) : tes titres d’abord, puis tout le catalogue pour en ajouter.</p>`;
   const mine = finderLibrary(q);
   const owned = new Set(S.entries().map((e) => e.id));
   const catalog = (finder.catalog || []).filter((t) => !owned.has(t.id)).slice(0, 12);
@@ -275,7 +275,7 @@ function finderResults() {
     }).join('')}</section>` : ''}
     <section><h3 class="label">Ajouter${C.live() ? '' : ' (catalogue de démo)'}</h3>
       ${finder.loading && !finder.catalog ? '<div class="spinner"></div>'
-        : catalog.length ? catalog.map((t) => row(t, `data-action="finderAdd" data-id="${esc(t.id)}"`, `${t.type === 'movie' ? 'Film' : 'Série'}${t.year ? ` · ${t.year}` : ''}`)).join('')
+        : catalog.length ? catalog.map((t) => row(t, `data-action="finderAdd" data-id="${esc(t.id)}"`, `${t.type === 'movie' ? 'Film' : 'Série'}${t.year ? ` · ${t.year}` : ''}${t.reason ? ` · <span class="reason">${esc(t.reason)}</span>` : ''}`)).join('')
         : `<p class="finder-hint">Aucun autre titre trouvé. <button class="link" data-action="finderManual">Ajouter manuellement</button></p>`}
     </section>`;
 }
@@ -285,7 +285,7 @@ function renderFinder() {
   if (!root.firstChild) {
     root.innerHTML = `<div class="finder-bar">
         ${icon('search')}
-        <input id="finder-q" type="search" placeholder="Série, film…" autocomplete="off" enterkeyhint="search" aria-label="Rechercher">
+        <input id="finder-q" type="search" placeholder="Titre, acteur, thème…" autocomplete="off" enterkeyhint="search" aria-label="Rechercher">
         <button class="finder-close" data-action="closeFinder">Fermer</button>
       </div>
       <div class="finder-body" id="finder-body"></div>`;
@@ -495,7 +495,7 @@ function viewAdd() {
     ${Auth.enabled && !Auth.user() ? `<p class="hint-card">${icon('search')}<span><a href="#/account/login">Connecte-toi</a> pour chercher dans tous les films et séries.</span></p>` : ''}
     <label class="search">
       ${icon('search')}
-      <input id="q" type="search" placeholder="Suits, Dune, The Bear…" value="${esc(ui.query)}" autocomplete="off" enterkeyhint="search">
+      <input id="q" type="search" placeholder="Titre, acteur, thème…" value="${esc(ui.query)}" autocomplete="off" enterkeyhint="search">
     </label>
     <div id="results">${resultsHTML()}</div>
     <button class="manual-cta" data-action="manual">
@@ -515,6 +515,7 @@ function resultsHTML() {
         <div class="tile-poster">${poster(t)}${S.has(t.id) ? `<span class="tile-done">${icon('check')}</span>` : ''}</div>
         <b class="tile-name">${esc(t.name)}</b>
         <span class="tile-sub">${t.type === 'movie' ? 'Film' : 'Série'}${t.year ? ` · ${t.year}` : ''}</span>
+        ${t.reason ? `<span class="tile-reason">${esc(t.reason)}</span>` : ''}
       </button>`).join('')}</div>`;
 }
 

@@ -138,6 +138,8 @@ const fromTmdb = (r, type = r.media_type) => ({
   poster: r.poster_path || null,
   backdrop: r.backdrop_path || null,
   overview: r.overview || '',
+  // Pourquoi ce résultat (recherche par acteur ou par thème) : « avec Bryan Cranston », « thème : zombie ».
+  reason: r._reason || null,
 });
 
 // Recherches déjà faites pendant la session : réponse instantanée.

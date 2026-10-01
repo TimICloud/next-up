@@ -87,29 +87,80 @@ function variants(query: string) {
   return [...out].filter((v) => v.length >= 2).slice(0, 6);
 }
 
+type Item = Record<string, unknown>;
+const popScore = (r: Item) => Math.min(1, Math.log10(1 + Number(r.popularity ?? 0)) / 3);
+const voteScore = (r: Item) => Math.min(1, Math.log10(1 + Number(r.vote_count ?? 0)) / 4);
+const getJson = async (path: string, params: Record<string, string>) => {
+  const res = await tmdb(path, params);
+  return res.ok ? res.json() : {};
+};
+
+// Talk-shows, actualités, téléréalité : les apparitions d'un acteur y sont du bruit.
+const NOISE_GENRES = [10767, 10763, 10764];
+
+// Recherche par titre (tolérante aux fautes), par personne (acteurs, réalisateurs) et par thème (mots-clés TMDB).
+// Chaque résultat trouvé via une personne ou un thème porte `_reason` (« avec Bryan Cranston », « thème : zombie »).
 async function smartSearch(query: string, region: string) {
   const q = norm(query);
-  const list = variants(query);
-  const pages = await Promise.all(list.map(async (v, i) => {
-    const res = await tmdb('/search/multi', { query: v, include_adult: 'false', region });
-    if (!res.ok) return [];
-    const data = await res.json();
-    return (data.results ?? []).map((r: Record<string, unknown>, rank: number) => ({ r, exact: i === 0 && rank < 5 }));
-  }));
+  const deep = q.length >= 3;
+  const [pages, people, keywords] = await Promise.all([
+    Promise.all(variants(query).map(async (v, i) => ((await getJson('/search/multi', { query: v, include_adult: 'false', region })).results ?? [])
+      .map((r: Item, rank: number) => ({ r, exact: i === 0 && rank < 5 })))),
+    deep ? getJson('/search/person', { query, include_adult: 'false' }) : {},
+    deep ? getJson('/search/keyword', { query }) : {},
+  ]);
 
-  const seen = new Map<string, { r: Record<string, unknown>; score: number }>();
-  for (const { r, exact } of pages.flat()) {
-    if (r.media_type !== 'tv' && r.media_type !== 'movie') continue;
+  const seen = new Map<string, { r: Item; score: number }>();
+  const add = (r: Item, score: number, reason: string | null) => {
+    if (r.media_type !== 'tv' && r.media_type !== 'movie') return;
+    if (r.adult || (r.genre_ids as number[] | undefined)?.some((g) => NOISE_GENRES.includes(g))) return;
     const key = `${r.media_type}-${r.id}`;
-    if (seen.has(key)) continue;
+    const prev = seen.get(key);
+    if (prev && prev.score >= score) return;
+    seen.set(key, { r: { ...r, _reason: reason }, score });
+  };
+
+  // 1. Titres
+  for (const { r, exact } of pages.flat()) {
     const sim = Math.max(similarity(q, norm(String(r.name ?? r.title ?? ''))), similarity(q, norm(String(r.original_name ?? r.original_title ?? ''))));
     if (sim < 0.45 && !exact) continue;
-    const pop = Math.min(1, Math.log10(1 + Number(r.popularity ?? 0)) / 3);
-    const votes = Math.min(1, Math.log10(1 + Number(r.vote_count ?? 0)) / 4);
     // Ressemblance d'abord, mais un titre connu passe devant un titre obscur au nom presque identique.
-    seen.set(key, { r, score: sim * 0.5 + pop * 0.3 + votes * 0.2 + (exact ? 0.05 : 0) });
+    add(r, sim * 0.5 + popScore(r) * 0.3 + voteScore(r) * 0.2 + (exact ? 0.05 : 0), null);
   }
-  const results = [...seen.values()].sort((a, b) => b.score - a.score).slice(0, 24).map((x) => x.r);
+
+  // 2. Personnes et 3. thèmes (en parallèle)
+  const persons = ((people as { results?: Item[] }).results ?? [])
+    .map((p) => ({ p, sim: similarity(q, norm(String(p.name ?? ''))) }))
+    .filter((x) => x.sim >= 0.75)
+    .slice(0, 2);
+  const themes = ((keywords as { results?: Item[] }).results ?? [])
+    .filter((k) => similarity(q, norm(String(k.name ?? ''))) >= 0.85)
+    .slice(0, 2);
+  const [credits, discovered] = await Promise.all([
+    Promise.all(persons.map(({ p }) => getJson(`/person/${p.id}/combined_credits`, {}))),
+    Promise.all(themes.flatMap((k) => ['tv', 'movie'].map(async (type) => ({
+      k, type,
+      d: await getJson(`/discover/${type}`, { with_keywords: String(k.id), sort_by: 'popularity.desc', include_adult: 'false', 'vote_count.gte': '30' }),
+    })))),
+  ]);
+
+  persons.forEach(({ p, sim }, i) => {
+    const c = credits[i] as { cast?: Item[]; crew?: Item[] };
+    const director = p.known_for_department === 'Directing';
+    const roles = [
+      ...(c.cast ?? []).filter((r) => !/\b(self|himself|herself|lui-même|elle-même)\b/i.test(String(r.character ?? ''))),
+      ...(c.crew ?? []).filter((r) => ['Director', 'Creator'].includes(String(r.job))),
+    ].sort((a, b) => Number(b.popularity ?? 0) - Number(a.popularity ?? 0)).slice(0, 15);
+    for (const r of roles) add(r, 0.45 + sim * 0.25 + popScore(r) * 0.2 + voteScore(r) * 0.1, `${director ? 'de' : 'avec'} ${p.name}`);
+  });
+
+  for (const { k, type, d } of discovered) {
+    for (const r of ((d as { results?: Item[] }).results ?? []).slice(0, 10)) {
+      add({ ...r, media_type: type }, 0.4 + popScore(r) * 0.3 + voteScore(r) * 0.2, `thème : ${k.name}`);
+    }
+  }
+
+  const results = [...seen.values()].sort((a, b) => b.score - a.score).slice(0, 30).map((x) => x.r);
   return { results };
 }
 
